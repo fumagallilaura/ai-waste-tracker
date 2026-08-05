@@ -52,14 +52,23 @@ For each story in the epic:
 5. Call doc-writer to write ADRs
 6. Call issue-creator to create GitHub Issues
 7. For each issue:
-   a. Record `Current Issue: <number>` in handoff.md — each subsequent agent reads this
-   b. Call implementer (code) and sre (infra) — they update issue label and comment when starting
-   c. Call reviewer to check correctness + security
-      - If issues found: set Next Agent back to implementer/sre (label back to `in-progress`)
-   d. Call linter to check linting
+   a. Record `Current Issue: <number>` in handoff.md \u2014 each subsequent agent reads this
+   b. Call implementer (code) and sre (infra) \u2014 they update issue label and comment when starting
+   c. **Run deterministic gates** \u2014 execute BEFORE reviewer:
+      ```bash
+      node scripts/gate-runner.mjs \
+        --root . \
+        --run .workflow/runs/<run-id> \
+        --gates lint,test \
+        --command-lint "<from-config-or-skip>" \
+        --command-test "<from-config-or-skip>"
+      ```
+      - If gates passed \u2192 continue to reviewer
+      - If gates failed \u2192 set Next Agent back to implementer/sre with gate output evidence
+   d. Call reviewer to check correctness + security (only after gates pass)
       - If issues found: set Next Agent back to implementer/sre (label back to `in-progress`)
    e. Call tester to run tests and write e2e
-      - If failures: set Next Agent back to implementer (label back to `in-progress`)
+      - If failures: set Next Agent to implementer (label back to `in-progress`)
    f. Call doc-writer to update changelog
    g. Call finisher to commit, write PR notes, generate release notes
 8. Record in handoff.md: story complete
