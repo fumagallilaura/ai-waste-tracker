@@ -9,4 +9,18 @@ The root session owns the run and creates specialists directly; `agents.max_dept
 
 After reading state, invoke the native subagent for every LLM phase immediately. The root may only inspect state, coordinate results, update transitions, and run deterministic gates; it must not perform requirements, design, implementation, review, documentation, or test-authoring itself.
 
-After implementation, invoke `node scripts/workflow-gates.mjs` for lint and test commands. Persist each gate result, request an independent reviewer only after deterministic gates, and update the handoff before finishing.
+After implementation, run deterministic gates BEFORE invoking reviewer:
+
+```bash
+node scripts/gate-runner.mjs \
+  --root . \
+  --run .workflow/runs/<run-id> \
+  --gates lint,test \
+  --command-lint "<from-config-or-skip>" \
+  --command-test "<from-config-or-skip>"
+```
+
+- If gates passed → continue to reviewer
+- If gates failed → return to implementer with gate output evidence
+
+Persist each gate result in `.workflow/runs/<run-id>/checks.json`, request an independent reviewer only after deterministic gates pass, and update the handoff before finishing.

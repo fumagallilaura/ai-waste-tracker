@@ -160,7 +160,8 @@ async function initialize(root, dryRun) {
   if (!dryRun) {
     await mkdir(path.dirname(file), { recursive: true });
     const discovery = await discoverProject(root);
-    await writeFile(file, `schema_version: 1.0\ndiscovery:\n  confidence: ${discovery.confidence}\n  languages: [${discovery.languages.join(', ')}]\nwork_items:\n  provider: none\n  publish: manual\n  project: null\n  require_confirmation: true\n`);
+    const gatesConfig = Object.entries(discovery.gates ?? {}).map(([name, cfg]) => `  ${name}:\n    command: "${cfg.command}"\n    blocking: ${name === 'git-status' ? 'false' : 'true'}\n    auto_detect: true`).join('\n');
+    await writeFile(file, `schema_version: 1.0\ndiscovery:\n  confidence: ${discovery.confidence}\n  languages: [${discovery.languages.join(', ')}]\ngates:\n${gatesConfig || '  # No gates auto-detected. Add manually, e.g.:\n  # lint:\n  #   command: "npm run lint"\n  #   blocking: true'}\nwork_items:\n  provider: none\n  publish: manual\n  project: null\n  require_confirmation: true\n`);
     await mkdir(path.join(root, '.workflow'), { recursive: true });
   }
   return true;
