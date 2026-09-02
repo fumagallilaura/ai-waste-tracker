@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     "eventos",
   ],
   manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
   themeColor: "#059669",
 };
 

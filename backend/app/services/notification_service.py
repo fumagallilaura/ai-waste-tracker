@@ -74,13 +74,18 @@ async def send_waste_reminder(user_email: str, production_nome: str, production_
 
     return await send_email(
         to=user_email,
-        subject=f"Como foi {production_nome}? Registre o desperdício em 30 segundos",
+        subject=(
+            f"Como foi {production_nome}? "
+            "Registre o desperdício em 30 segundos"
+        ),
         html=html,
         text=text,
     )
 
 
-async def send_pre_event_reminder(user_email: str, production_nome: str, production_data: str) -> dict:
+async def send_pre_event_reminder(
+    user_email: str, production_nome: str, production_data: str
+) -> dict:
     """Send a reminder 1 day before an event with shopping list."""
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

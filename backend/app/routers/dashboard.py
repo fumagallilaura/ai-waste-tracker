@@ -51,15 +51,12 @@ async def get_dashboard_metrics(
         )
         row = result.one()
         desperdicio_total = float(row[0] or 0)
-        waste_count = int(row[1] or 0)
     else:
         desperdicio_total = 0
-        waste_count = 0
 
-    # Calculate estimated savings (simplified: benchmark waste - actual waste)
-    # For MVP, we use a simple formula: economia = (compras * 0.113) - desperdicio_real
-    # 11.3% is the average waste percentage from market research
-    economia_total = max(0, (desperdicio_total / 0.113 * 0.113) - desperdicio_total) if desperdicio_total > 0 else 0
+    # Estimated savings placeholder: real formula needs purchase costs (D006).
+    # Until purchases are registered, economia is reported as 0.
+    economia_total: float = 0
 
     num_productions = len(productions)
 
@@ -67,8 +64,12 @@ async def get_dashboard_metrics(
         economia_total=round(economia_total, 2),
         desperdicio_total=round(desperdicio_total, 2),
         eventos_realizados=num_productions,
-        desperdicio_medio_por_evento=round(desperdicio_total / num_productions, 2) if num_productions > 0 else 0,
-        economia_medio_por_evento=round(economia_total / num_productions, 2) if num_productions > 0 else 0,
+        desperdicio_medio_por_evento=(
+            round(desperdicio_total / num_productions, 2) if num_productions > 0 else 0
+        ),
+        economia_medio_por_evento=(
+            round(economia_total / num_productions, 2) if num_productions > 0 else 0
+        ),
         periodo=periodo,
     )
 

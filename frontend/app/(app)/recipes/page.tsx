@@ -5,7 +5,7 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { formatCurrency, getDisplayUnit } from "@/lib/units";
-import { Plus, Edit2, Trash2, Copy } from "lucide-react";
+import { Plus, Edit2, Trash2, Copy, Globe } from "lucide-react";
 
 interface Ingredient {
   id: string;
@@ -92,6 +92,14 @@ export default function RecipesPage() {
         >
           <Plus className="w-4 h-4" />
           Nova receita
+        </Link>
+        <Link
+          href="/recipes/import"
+          data-testid="import-recipe-button"
+          className="flex items-center gap-2 bg-bg-surface text-primary-700 dark:text-primary-300 px-4 py-2 rounded-lg border border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm"
+        >
+          <Globe className="w-4 h-4" />
+          Importar da internet
         </Link>
       </div>
 

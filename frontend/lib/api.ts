@@ -13,7 +13,7 @@ async function fetchWithRetry(url: string, options: FetchOptions = {}): Promise<
   for (let i = 0; i <= retry; i++) {
     try {
       const response = await fetch(`${API_BASE}${url}`, fetchOptions);
-      if (!response.ok && i < retry) {
+      if (!response.ok && response.status >= 500 && i < retry) {
         continue;
       }
       return response;

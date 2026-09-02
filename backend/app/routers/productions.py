@@ -11,7 +11,12 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Production, ProductionRecipe, User
-from app.schemas import ProductionCreate, ProductionDetailResponse, ProductionResponse, ProductionUpdate
+from app.schemas import (
+    ProductionCreate,
+    ProductionDetailResponse,
+    ProductionResponse,
+    ProductionUpdate,
+)
 
 router = APIRouter()
 
@@ -49,8 +54,9 @@ async def create_production(
     await db.flush()
 
     for item in data.recipes:
-        production.production_recipes.append(
+        db.add(
             ProductionRecipe(
+                production_id=production.id,
                 recipe_id=item.recipe_id,
                 escala_fator=item.escala_fator,
                 item_nome=item.item_nome,
@@ -181,7 +187,11 @@ async def delete_production(
     await db.commit()
 
 
-@router.post("/{production_id}/duplicate", response_model=ProductionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{production_id}/duplicate",
+    response_model=ProductionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def duplicate_production(
     production_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -209,8 +219,9 @@ async def duplicate_production(
     await db.flush()
 
     for pr in original.production_recipes:
-        production.production_recipes.append(
+        db.add(
             ProductionRecipe(
+                production_id=production.id,
                 recipe_id=pr.recipe_id,
                 escala_fator=pr.escala_fator,
                 item_nome=pr.item_nome,

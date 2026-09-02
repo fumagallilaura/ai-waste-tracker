@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Production, Recipe, User, WasteRecord
+from app.models import Production, Recipe, User
 
 router = APIRouter()
 
@@ -46,7 +44,7 @@ async def export_user_data(
 
     # Build export data
     export_data = {
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "user": {
             "id": str(user.id),
             "email": user.email,

@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -28,9 +27,9 @@ async def create_checkout(
             init_point=result["init_point"],
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Payment error: {str(e)}") from e
 
 
 @router.post("/webhook", status_code=status.HTTP_204_NO_CONTENT)

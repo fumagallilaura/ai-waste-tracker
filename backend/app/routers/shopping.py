@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Production, ProductionRecipe, RecipeIngredient, ShoppingListItem, User
+from app.models import Production, RecipeIngredient, ShoppingListItem, User
 from app.schemas import ShoppingListItemResponse, ShoppingListUpdateItem
 
 router = APIRouter()

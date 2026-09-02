@@ -36,12 +36,45 @@ Isso sobe 3 containers:
 - **Calculadora pública:** http://localhost:3000
 - **API docs (Swagger):** http://localhost:8000/docs
 - **Health check:** http://localhost:8000/api/health
+- **Importar receita:** `/recipes` → botão "Importar da internet" (cola a URL de uma receita pública; ingredientes são extraídos de dados estruturados JSON-LD do site e revisados antes de salvar)
 
 ### 4. Rode as migrações do banco
 
 ```bash
 docker compose exec backend alembic upgrade head
 ```
+
+---
+
+## Testes (Fase 5)
+
+### Backend — testes unitários + API (T24)
+
+Rodam em SQLite in-memory (não precisa de Postgres):
+
+```bash
+docker compose run --rm backend pytest
+```
+
+99 testes: unidades, benchmarks, security (JWT RS256 + argon2), schemas,
+services (Mercado Pago/Resend em modo dev) e API completa (auth com rotação
+de refresh token, receitas, produções, lista de compras, desperdício, dashboard).
+
+### Frontend — E2E com Playwright (T25)
+
+Com o stack rodando (`docker compose up -d`), no host:
+
+```bash
+cd frontend
+npm install
+npx playwright install chromium   # primeira vez
+npm run test:e2e
+```
+
+10 cenários: calculadora pública, registro/login/logout, guarda de rota,
+receita → produção → lista de compras escalada → desperdício → dashboard.
+
+Configure os alvos com `E2E_BASE_URL` (padrão `http://localhost:3000`).
 
 ---
 
@@ -92,6 +125,7 @@ O app suporta **3 modos de tema** (salvos em `localStorage`):
 ├── frontend/         # Next.js 15 (PWA)
 │   ├── app/
 │   │   ├── (public)/ # Calculadora pública (SEO)
+│   │   ├── (auth)/   # Login e registro
 │   │   └── (app)/    # App autenticado
 │   └── lib/          # API client, auth, units, theme
 ├── infra/            # Terraform (AWS)

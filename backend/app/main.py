@@ -2,18 +2,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.session import engine
 from app.models import Base
 
 settings = get_settings()
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +30,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -42,14 +45,26 @@ app.add_middleware(
 )
 
 # Import and include routers
-from app.routers import auth, recipes, productions, shopping, waste, dashboard, payments, health, lgpd  # noqa: E402
+from app.routers import (  # noqa: E402
+    auth,
+    dashboard,
+    health,
+    lgpd,
+    payments,
+    productions,
+    recipes,
+    shopping,
+    waste,
+)
 
-app.include_router(auth.router, prefix=f"{settings.api_prefix}/auth", tags=["auth"])
-app.include_router(recipes.router, prefix=f"{settings.api_prefix}/recipes", tags=["recipes"])
-app.include_router(productions.router, prefix=f"{settings.api_prefix}/productions", tags=["productions"])
-app.include_router(shopping.router, prefix=f"{settings.api_prefix}/productions", tags=["shopping"])
-app.include_router(waste.router, prefix=f"{settings.api_prefix}/productions", tags=["waste"])
-app.include_router(dashboard.router, prefix=f"{settings.api_prefix}/dashboard", tags=["dashboard"])
-app.include_router(payments.router, prefix=f"{settings.api_prefix}/payments", tags=["payments"])
-app.include_router(lgpd.router, prefix=f"{settings.api_prefix}/lgpd", tags=["lgpd"])
+PREFIX = settings.api_prefix
+
+app.include_router(auth.router, prefix=f"{PREFIX}/auth", tags=["auth"])
+app.include_router(recipes.router, prefix=f"{PREFIX}/recipes", tags=["recipes"])
+app.include_router(productions.router, prefix=f"{PREFIX}/productions", tags=["productions"])
+app.include_router(shopping.router, prefix=f"{PREFIX}/productions", tags=["productions"])
+app.include_router(waste.router, prefix=f"{PREFIX}/productions", tags=["productions"])
+app.include_router(dashboard.router, prefix=f"{PREFIX}/dashboard", tags=["dashboard"])
+app.include_router(payments.router, prefix=f"{PREFIX}/payments", tags=["payments"])
+app.include_router(lgpd.router, prefix=f"{PREFIX}/lgpd", tags=["lgpd"])
 app.include_router(health.router, prefix=f"{settings.api_prefix}", tags=["health"])

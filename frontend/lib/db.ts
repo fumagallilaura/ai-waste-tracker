@@ -18,7 +18,7 @@ export async function saveUserProfile(profile: Record<string, unknown>): Promise
 }
 
 export async function getUserProfile(): Promise<Record<string, unknown> | null> {
-  return get(`${DB_PREFIX}user_profile`);
+  return (await get(`${DB_PREFIX}user_profile`)) ?? null;
 }
 
 // ─── Recipes Cache ────────────────────────────────────────────
@@ -28,7 +28,7 @@ export async function cacheRecipes(recipes: unknown[]): Promise<void> {
 }
 
 export async function getCachedRecipes(): Promise<unknown[] | null> {
-  return get(`${DB_PREFIX}recipes`);
+  return (await get(`${DB_PREFIX}recipes`)) ?? null;
 }
 
 // ─── Productions Cache ────────────────────────────────────────
@@ -38,7 +38,7 @@ export async function cacheProductions(productions: unknown[]): Promise<void> {
 }
 
 export async function getCachedProductions(): Promise<unknown[] | null> {
-  return get(`${DB_PREFIX}productions`);
+  return (await get(`${DB_PREFIX}productions`)) ?? null;
 }
 
 // ─── Pending Sync Queue ───────────────────────────────────────
@@ -54,7 +54,7 @@ export async function addPendingSync(sync: Omit<PendingSync, "id" | "created_at"
 }
 
 export async function getPendingSyncs(): Promise<PendingSync[]> {
-  return get(`${DB_PREFIX}pending_sync`) || [];
+  return (await get(`${DB_PREFIX}pending_sync`)) || [];
 }
 
 export async function removePendingSync(id: string): Promise<void> {
@@ -76,7 +76,7 @@ export async function setLastSync(timestamp: string): Promise<void> {
 }
 
 export async function getLastSync(): Promise<string | null> {
-  return get(`${DB_PREFIX}last_sync`);
+  return (await get(`${DB_PREFIX}last_sync`)) ?? null;
 }
 
 // ─── Clear All Offline Data ───────────────────────────────────

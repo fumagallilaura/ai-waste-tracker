@@ -3,8 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.core.units import UNIT_CONVERSIONS
 
 # ─── Auth Schemas ───────────────────────────────────────────────
 
@@ -24,6 +25,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -41,6 +46,13 @@ class RecipeIngredientCreate(BaseModel):
     quantidade: float = Field(gt=0)
     unidade: str = Field(max_length=20)
     preco_unitario: float = Field(ge=0, default=0)
+
+    @field_validator("unidade")
+    @classmethod
+    def validate_unidade(cls, v: str) -> str:
+        if v not in UNIT_CONVERSIONS:
+            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
+        return v
 
 
 class RecipeIngredientResponse(BaseModel):
@@ -79,6 +91,27 @@ class RecipeResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ─── Recipe Import Schemas ──────────────────────────────────────
+
+class RecipeImportRequest(BaseModel):
+    url: str = Field(max_length=2048)
+
+
+class RecipeImportIngredient(BaseModel):
+    ingrediente: str
+    quantidade: float
+    unidade: str
+    original: str
+
+
+class RecipeImportResponse(BaseModel):
+    nome: str
+    rendimento_base: int
+    tipo: str | None
+    ingredients: list[RecipeImportIngredient]
+    source_url: str
 
 
 # ─── Production Schemas ─────────────────────────────────────────
@@ -122,10 +155,19 @@ class ProductionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductionRecipeResponse(BaseModel):
+    id: uuid.UUID
+    recipe_id: uuid.UUID | None
+    escala_fator: float
+    item_nome: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class ProductionDetailResponse(ProductionResponse):
-    recipes: list[dict] = Field(default_factory=list)
-    shopping_list: list[dict] = Field(default_factory=list)
-    waste_records: list[dict] = Field(default_factory=list)
+    recipes: list[ProductionRecipeResponse] = Field(default_factory=list)
+    shopping_list: list[ShoppingListItemResponse] = Field(default_factory=list)
+    waste_records: list[WasteRecordResponse] = Field(default_factory=list)
 
 
 # ─── Shopping List Schemas ──────────────────────────────────────
@@ -163,8 +205,9 @@ class WasteRecordCreate(BaseModel):
     motivo: str
     custo_desperdicio: float = Field(ge=0, default=0)
 
-    @validator("motivo")
-    def validate_motivo(cls, v):
+    @field_validator("motivo")
+    @classmethod
+    def validate_motivo(cls, v: str) -> str:
         if v not in WASTE_MOTIVOS:
             raise ValueError(f"Motivo must be one of {WASTE_MOTIVOS}")
         return v

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ─── Design Tokens ───────────────────────────────────────────
    Kitchen-optimized palette based on research:
    - Warm surfaces (food apps: iCook, Mise, BurmeseKitchen)

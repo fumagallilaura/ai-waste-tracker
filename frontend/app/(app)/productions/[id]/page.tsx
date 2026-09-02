@@ -74,6 +74,19 @@ export default function ProductionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const handleTabChange = (key: Tab) => {
+    setActiveTab(key);
+    if (key === "shopping" && production && production.shopping_list.length === 0) {
+      const token = getAccessToken();
+      if (!token) return;
+      apiGet<Production["shopping_list"]>(`/productions/${id}/shopping-list`, token)
+        .then((items) =>
+          setProduction((prev) => (prev ? { ...prev, shopping_list: items } : prev))
+        )
+        .catch(() => {});
+    }
+  };
+
   const handleToggleEstoque = async (itemId: string) => {
     const token = getAccessToken();
     if (!token || !production) return;
@@ -82,7 +95,7 @@ export default function ProductionDetailPage() {
     if (!item) return;
 
     try {
-      const updated = await apiPut(
+      const updated = await apiPut<Production["shopping_list"][number]>(
         `/productions/${id}/shopping-list/${itemId}`,
         { ja_tem_estoque: !item.ja_tem_estoque },
         token
@@ -110,7 +123,7 @@ export default function ProductionDetailPage() {
     }
 
     try {
-      const newWaste = await apiPost(
+      const newWaste = await apiPost<Production["waste_records"][number]>(
         `/productions/${id}/waste`,
         {
           ingrediente_ou_prato: wasteForm.ingrediente_ou_prato,
@@ -252,7 +265,7 @@ export default function ProductionDetailPage() {
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => handleTabChange(key)}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === key
                 ? "bg-bg-surface text-text-primary shadow-sm"

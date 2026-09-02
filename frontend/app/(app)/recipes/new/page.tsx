@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { takeRecipePrefill } from "@/lib/prefill";
 import { toBaseUnit } from "@/lib/units";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 
@@ -28,6 +29,24 @@ export default function NewRecipePage() {
   ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const prefill = takeRecipePrefill();
+    if (!prefill) return;
+    setNome(prefill.nome);
+    setRendimentoBase(prefill.rendimento_base);
+    setTipo(prefill.tipo || "");
+    if (prefill.ingredients.length > 0) {
+      setIngredients(
+        prefill.ingredients.map((i) => ({
+          ingrediente: i.ingrediente,
+          quantidade: i.quantidade,
+          unidade: UNIDADES.includes(i.unidade) ? i.unidade : "g",
+          preco_unitario: i.preco_unitario || "",
+        }))
+      );
+    }
+  }, []);
 
   const addIngredient = () => {
     setIngredients((prev) => [

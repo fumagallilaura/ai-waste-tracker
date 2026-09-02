@@ -2,18 +2,35 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.rate_limit import limiter
 from app.core.units import to_base_unit
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Recipe, RecipeIngredient, User
-from app.schemas import RecipeCreate, RecipeResponse, RecipeUpdate
+from app.schemas import (
+    RecipeCreate,
+    RecipeImportRequest,
+    RecipeImportResponse,
+    RecipeResponse,
+    RecipeUpdate,
+)
+from app.services.recipe_import_service import RecipeImportError, import_recipe_from_url
 
 router = APIRouter()
+
+
+async def _load_recipe(db: AsyncSession, recipe_id: uuid.UUID) -> Recipe:
+    result = await db.execute(
+        select(Recipe)
+        .where(Recipe.id == recipe_id)
+        .options(selectinload(Recipe.ingredients))
+    )
+    return result.scalar_one()
 
 
 @router.get("/", response_model=list[RecipeResponse])
@@ -49,8 +66,9 @@ async def create_recipe(
 
     for ing in data.ingredients:
         base_qtd, base_unit = to_base_unit(ing.quantidade, ing.unidade)
-        recipe.ingredients.append(
+        db.add(
             RecipeIngredient(
+                recipe_id=recipe.id,
                 ingrediente=ing.ingrediente,
                 quantidade=ing.quantidade,
                 unidade=ing.unidade,
@@ -61,8 +79,24 @@ async def create_recipe(
         )
 
     await db.commit()
-    await db.refresh(recipe)
-    return recipe
+    return await _load_recipe(db, recipe.id)
+
+
+@router.post("/import", response_model=RecipeImportResponse)
+@limiter.limit("10/minute")
+async def import_recipe(
+    request: Request,
+    data: RecipeImportRequest,
+    user: User = Depends(get_current_user),
+):
+    """Parse a public recipe URL into structured data (user reviews before saving)."""
+    try:
+        result = await import_recipe_from_url(data.url)
+    except RecipeImportError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from None
+    return result
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
@@ -123,8 +157,7 @@ async def update_recipe(
             )
 
     await db.commit()
-    await db.refresh(recipe)
-    return recipe
+    return await _load_recipe(db, recipe.id)
 
 
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -145,7 +178,11 @@ async def delete_recipe(
     await db.commit()
 
 
-@router.post("/{recipe_id}/duplicate", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{recipe_id}/duplicate",
+    response_model=RecipeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def duplicate_recipe(
     recipe_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -171,8 +208,9 @@ async def duplicate_recipe(
     await db.flush()
 
     for ing in original.ingredients:
-        recipe.ingredients.append(
+        db.add(
             RecipeIngredient(
+                recipe_id=recipe.id,
                 ingrediente=ing.ingrediente,
                 quantidade=ing.quantidade,
                 unidade=ing.unidade,
@@ -183,5 +221,4 @@ async def duplicate_recipe(
         )
 
     await db.commit()
-    await db.refresh(recipe)
-    return recipe
+    return await _load_recipe(db, recipe.id)

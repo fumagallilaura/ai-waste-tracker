@@ -28,6 +28,7 @@ services:
       APP_JWT_PUBLIC_KEY_PATH: /tmp/public_key.pem
       APP_MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-TEST-placeholder}
       APP_MERCADO_PAGO_SANDBOX: "true"
+      APP_RATE_LIMIT_LOGIN_PER_MINUTE: "30"
       APP_RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
       APP_EMAIL_FROM: noreply@desperdiciozero.com.br
       APP_CORS_ORIGINS: '["http://localhost:3000"]'

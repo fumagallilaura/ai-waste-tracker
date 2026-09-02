@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -16,7 +17,11 @@ from app.services.notification_service import send_waste_reminder
 router = APIRouter()
 
 
-@router.post("/{production_id}/waste", response_model=WasteRecordResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{production_id}/waste",
+    response_model=WasteRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_waste_record(
     production_id: uuid.UUID,
     data: WasteRecordCreate,
@@ -52,16 +57,14 @@ async def create_waste_record(
         production.status = "finalizado"
         await db.commit()
 
-        # Send reminder email (first waste record = event finished)
-        try:
+        # Send reminder email (first waste record = event finished).
+        # Don't fail the request if email fails.
+        with contextlib.suppress(Exception):
             await send_waste_reminder(
                 user_email=user.email,
                 production_nome=production.nome,
                 production_data=production.data.strftime("%d/%m/%Y"),
             )
-        except Exception:
-            # Don't fail the request if email fails
-            pass
 
     return waste_record
 
@@ -89,7 +92,7 @@ async def update_waste_record(
         raise HTTPException(status_code=404, detail="Waste record not found")
 
     # Check 24h window
-    if record.created_at < datetime.now(timezone.utc) - timedelta(hours=24):
+    if record.created_at < datetime.now(UTC) - timedelta(hours=24):
         raise HTTPException(
             status_code=403,
             detail="Waste records can only be edited within 24 hours",
@@ -124,7 +127,7 @@ async def delete_waste_record(
         raise HTTPException(status_code=404, detail="Waste record not found")
 
     # Check 24h window
-    if record.created_at < datetime.now(timezone.utc) - timedelta(hours=24):
+    if record.created_at < datetime.now(UTC) - timedelta(hours=24):
         raise HTTPException(
             status_code=403,
             detail="Waste records can only be deleted within 24 hours",

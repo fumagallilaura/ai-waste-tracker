@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import jwt
@@ -61,7 +61,7 @@ def create_access_token(
     plan: str,
 ) -> str:
     """Create a JWT access token."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "email": email,
@@ -76,7 +76,7 @@ def create_access_token(
 
 def create_refresh_token(user_id: uuid.UUID) -> tuple[str, datetime]:
     """Create a JWT refresh token and return (token, expires_at)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(days=settings.jwt_refresh_token_expire_days)
     payload = {
         "sub": str(user_id),
@@ -98,8 +98,8 @@ def decode_token(token: str) -> dict:
 
 def generate_rsa_key_pair() -> tuple[str, str]:
     """Generate an RSA key pair for development."""
-    from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
 
     private_key = rsa.generate_private_key(
         public_exponent=65537,

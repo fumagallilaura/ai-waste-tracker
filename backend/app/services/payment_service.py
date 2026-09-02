@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import select
@@ -21,6 +21,16 @@ MP_BASE_URL = (
     if not settings.mercado_pago_sandbox
     else "https://api.mercadopago.com"  # Sandbox uses same base URL
 )
+
+
+
+def _notification_url() -> str:
+    """Public API webhook URL for payment notifications."""
+    base = settings.cors_origins[0]
+    base = base.replace("http://", "https://")
+    base = base.replace("localhost:3000", "api.desperdiciozero.com.br")
+    return f"{base}/api/payments/webhook"
+
 
 PLAN_PRICES = {
     "pro_mensal": {"value": 1990, "title": "Desperdício Zero - Plano Mensal"},
@@ -54,7 +64,7 @@ async def create_preference(user: User, plan: str) -> dict:
             "failure": f"{settings.cors_origins[0]}/dashboard?payment=failure",
             "pending": f"{settings.cors_origins[0]}/dashboard?payment=pending",
         },
-        "notification_url": f"{settings.cors_origins[0].replace('http://', 'https://').replace('localhost:3000', 'api.desperdiciozero.com.br')}/api/payments/webhook",
+        "notification_url": _notification_url(),
         "external_reference": str(user.id),
         "auto_return": "approved",
         "payment_methods": {
@@ -104,7 +114,6 @@ def verify_webhook_signature(request_body: bytes, x_signature: str) -> bool:
     # Mercado Pago sends X-Signature header
     # Format: t=<timestamp>,v1=<hash>
     parts = dict(p.split("=") for p in x_signature.split(","))
-    timestamp = parts.get("t", "")
     signature = parts.get("v1", "")
 
     # Create the string to sign: "id:<payment_id>;topic:<topic_type>"
@@ -124,7 +133,7 @@ async def activate_plan(user_id: uuid.UUID, db: AsyncSession) -> None:
     user = result.scalar_one_or_none()
     if user:
         user.plan = "pro"
-        user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        user.plan_expires_at = datetime.now(UTC) + timedelta(days=30)
 
 
 async def cancel_plan(user_id: uuid.UUID, db: AsyncSession) -> None:

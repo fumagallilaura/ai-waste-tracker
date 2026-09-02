@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.units import to_base_unit, from_base_unit, get_display_unit
+from app.core.units import from_base_unit, get_display_unit, to_base_unit
 
 
 class TestToBaseUnit:

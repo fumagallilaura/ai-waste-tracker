@@ -30,3 +30,7 @@ Thumbs.db
 
 # Docker
 postgres_data/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/

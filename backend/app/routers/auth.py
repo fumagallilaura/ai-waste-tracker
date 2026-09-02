@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import LOGIN_RATE_LIMIT, limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_token,
     hash_password,
     verify_password,
 )
@@ -19,6 +21,7 @@ from app.dependencies import get_current_user
 from app.models import RefreshToken, User
 from app.schemas import (
     LoginRequest,
+    RefreshTokenRequest,
     RegisterRequest,
     TokenResponse,
     UserResponse,
@@ -33,10 +36,11 @@ def _hash_token(token: str) -> str:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(LOGIN_RATE_LIMIT)
+async def register(request: Request, data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """Create a new user account."""
     # Check if email already exists
-    result = await db.execute(select(User).where(User.email == request.email))
+    result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -45,8 +49,8 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 
     # Create user
     user = User(
-        email=request.email,
-        password_hash=hash_password(request.password),
+        email=data.email,
+        password_hash=hash_password(data.password),
         plan="free",
     )
     db.add(user)
@@ -70,12 +74,13 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(LOGIN_RATE_LIMIT)
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate and return tokens."""
-    result = await db.execute(select(User).where(User.email == request.email))
+    result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(request.password, user.password_hash):
+    if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -100,11 +105,11 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    refresh_token: str,
+    request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Rotate refresh token and return new access + refresh tokens."""
-    from app.core.security import decode_token
+    refresh_token = request.refresh_token
 
     try:
         payload = decode_token(refresh_token)
@@ -112,7 +117,7 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
-        )
+        ) from None
 
     if payload.get("type") != "refresh":
         raise HTTPException(
@@ -133,14 +138,14 @@ async def refresh_token(
     )
     stored_token = result.scalar_one_or_none()
 
-    if stored_token is None or stored_token.expires_at < datetime.now(timezone.utc):
+    if stored_token is None or stored_token.expires_at < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
     # Revoke old token (rotation)
-    stored_token.revoked_at = datetime.now(timezone.utc)
+    stored_token.revoked_at = datetime.now(UTC)
 
     # Get user
     result = await db.execute(select(User).where(User.id == user_id))
@@ -165,10 +170,11 @@ async def refresh_token(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
-    refresh_token: str,
+    request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Revoke a refresh token."""
+    refresh_token = request.refresh_token
     try:
         payload = decode_token(refresh_token)
     except Exception:
@@ -187,7 +193,7 @@ async def logout(
     stored_token = result.scalar_one_or_none()
 
     if stored_token:
-        stored_token.revoked_at = datetime.now(timezone.utc)
+        stored_token.revoked_at = datetime.now(UTC)
         await db.commit()
 
     return None
