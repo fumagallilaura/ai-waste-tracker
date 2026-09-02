@@ -1,4 +1,32 @@
-.workflow/
+# Dependencies
 node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# Environment
 .env
-*.log
+
+# Build outputs
+.next/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Workflow state (local only)
+.workflow/
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Docker
+postgres_data/

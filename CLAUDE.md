@@ -58,3 +58,9 @@ npm pack --dry-run
 
 Before any npm release, verify the packed tarball. Release workflow provenance
 requires `package.json.repository.url` to match the GitHub repository.
+
+<!-- orchestrated-squad:claude:start -->
+## Orchestrated Squad
+
+Use the installed `squad-*` workflow commands. The root session owns orchestration and `.workflow/` is canonical state. For every LLM workflow phase, the root must invoke the platform-native specialist subagent; it may only inspect state, coordinate transitions, and run deterministic gates itself. Specialists must not delegate again. Preserve instructions outside this managed block.
+<!-- orchestrated-squad:claude:end -->

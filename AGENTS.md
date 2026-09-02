@@ -84,3 +84,27 @@ Skills are project-specific. The agents discover them automatically via `npx ski
 - Use `context7` to verify library/framework/API behavior
 - Use `caveman-commit` for commit messages (finisher)
 - Use `github-issues` for issue creation (issue-creator)
+
+<!-- orchestrated-squad:codex:start -->
+## Orchestrated Squad
+
+Use the installed `squad-*` workflow commands. The root session owns orchestration and `.workflow/` is canonical state. For every LLM workflow phase, the root must invoke the platform-native specialist subagent; it may only inspect state, coordinate transitions, and run deterministic gates itself. Specialists must not delegate again. Preserve instructions outside this managed block.
+<!-- orchestrated-squad:codex:end -->
+
+<!-- orchestrated-squad:opencode:start -->
+## Orchestrated Squad
+
+Use the installed `squad-*` workflow commands. The root session owns orchestration and `.workflow/` is canonical state. For every LLM workflow phase, the root must invoke the platform-native specialist subagent; it may only inspect state, coordinate transitions, and run deterministic gates itself. Specialists must not delegate again. Preserve instructions outside this managed block.
+<!-- orchestrated-squad:opencode:end -->
+
+<!-- orchestrated-squad:devin:start -->
+## Orchestrated Squad
+
+Use the installed `squad-*` workflow commands. The root session owns orchestration and `.workflow/` is canonical state. For every LLM workflow phase, the root must invoke the platform-native specialist subagent; it may only inspect state, coordinate transitions, and run deterministic gates itself. Specialists must not delegate again. Preserve instructions outside this managed block.
+<!-- orchestrated-squad:devin:end -->
+
+<!-- orchestrated-squad:vscode:start -->
+## Orchestrated Squad
+
+Use the installed `squad-*` workflow commands. The root session owns orchestration and `.workflow/` is canonical state. For every LLM workflow phase, the root must invoke the platform-native specialist subagent; it may only inspect state, coordinate transitions, and run deterministic gates itself. Specialists must not delegate again. Preserve instructions outside this managed block.
+<!-- orchestrated-squad:vscode:end -->

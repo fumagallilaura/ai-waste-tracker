@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "files": {
+    ".codex/config.toml": {
+      "hash": "76ef3bccc64be428765691e60f789ed737cca0401b4b6791b8d86ce08fadce0e",
+      "target": "codex"
+    },
+    ".claude/settings.json": {
+      "hash": "c59dd3a24518afd681a1599af0776fbe5645734bc0a5db05105470f5e930c301",
+      "target": "claude"
+    },
+    "opencode.json": {
+      "hash": "5579b2368b9a0a29325a6414344d35723da4847c6c563fa6cf6ba51284337300",
+      "target": "opencode"
+    },
+    ".devin/config.json": {
+      "hash": "108cdb7ea8121fb0d9a4d6c45c81d4f783e802940bc26f2a1159dab1c3ad608f",
+      "target": "devin"
+    },
+    ".squad/config.yaml": {
+      "hash": "24d7724e211e98ec1ee23dfc625617249745484df20770182baddc553e970d62",
+      "target": "core"
+    }
+  },
+  "blocks": {
+    "codex:AGENTS.md": {
+      "file": "AGENTS.md",
+      "start": "<!-- orchestrated-squad:codex:start -->",
+      "end": "<!-- orchestrated-squad:codex:end -->",
+      "hash": "ac354be37ebeb87ffa8346b96157c328a7f119ec6f3d8f6ff2b42d8fe686ffe4"
+    },
+    "claude:CLAUDE.md": {
+      "file": "CLAUDE.md",
+      "start": "<!-- orchestrated-squad:claude:start -->",
+      "end": "<!-- orchestrated-squad:claude:end -->",
+      "hash": "1b6b78940a4bfb692b883badd121f6024388f4b37334ef14f7926c19ef4b0368"
+    },
+    "opencode:AGENTS.md": {
+      "file": "AGENTS.md",
+      "start": "<!-- orchestrated-squad:opencode:start -->",
+      "end": "<!-- orchestrated-squad:opencode:end -->",
+      "hash": "5f5aa49276cdc16b74e47be32f91aabce101bfd904d728b747ea8c1c5f4e85ad"
+    },
+    "devin:AGENTS.md": {
+      "file": "AGENTS.md",
+      "start": "<!-- orchestrated-squad:devin:start -->",
+      "end": "<!-- orchestrated-squad:devin:end -->",
+      "hash": "c321f64733ebe9949b24f08b6c6b205cf222d7301e43e5e4c4f586f80056f935"
+    },
+    "vscode:AGENTS.md": {
+      "file": "AGENTS.md",
+      "start": "<!-- orchestrated-squad:vscode:start -->",
+      "end": "<!-- orchestrated-squad:vscode:end -->",
+      "hash": "5681d9908af935d6c73fba7a2f99a84cbc7ae5a302f23ed0e940a4fc962473ae"
+    }
+  },
+  "package": "@gregori/orchestrated-squad",
+  "version": "0.7.2",
+  "targets": [
+    "codex",
+    "claude",
+    "opencode",
+    "devin",
+    "vscode"
+  ]
+}
