@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiGet, apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { Plus, Trash2, ArrowLeft, BookOpen, UtensilsCrossed, Sparkles } from "lucide-react";
+import { DRAFT_KEYS, clearDraft, formatDraftAge, loadDraft, saveDraft } from "@/lib/drafts";
+import { Plus, Trash2, ArrowLeft, BookOpen, UtensilsCrossed, Sparkles, Eraser, History } from "lucide-react";
 
 interface Recipe {
   id: string;
@@ -44,6 +45,26 @@ const TIPOS_EVENTO = [
   "outro",
 ];
 
+interface ProductionDraft {
+  nome: string;
+  tipo: string;
+  data: string;
+  convidados: string;
+  clientId: string;
+  fluxoMode: FluxoMode;
+  selectedRecipes: { recipeId: string; escalaFator: number }[];
+  manualItems: ManualItem[];
+}
+
+function draftHasContent(draft: ProductionDraft): boolean {
+  return Boolean(
+    draft.nome.trim() ||
+    draft.convidados ||
+    draft.selectedRecipes.length > 0 ||
+    draft.manualItems.some((i) => i.nome.trim() || i.quantidadeTotal)
+  );
+}
+
 export default function NewProductionPage() {
   const router = useRouter();
   const [fluxoMode, setFluxoMode] = useState<FluxoMode>("recipe");
@@ -67,13 +88,76 @@ export default function NewProductionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<{
+    data: ProductionDraft;
+    updatedAt: number;
+  } | null>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const skipAutosave = useRef(true);
 
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
     apiGet<Recipe[]>("/recipes", token).then(setRecipes).catch(() => {});
     apiGet<ClientOption[]>("/clients", token).then(setClients).catch(() => {});
+
+    // rascunho anterior: oferece retomar em vez de preencher sozinho
+    const draft = loadDraft<ProductionDraft>(DRAFT_KEYS.producao);
+    if (draft && draftHasContent(draft.data)) setPendingDraft(draft);
+    else skipAutosave.current = false;
   }, []);
+
+  // autosave do rascunho (com debounce leve)
+  useEffect(() => {
+    if (skipAutosave.current) return;
+    const draft: ProductionDraft = {
+      nome, tipo, data, convidados, clientId, fluxoMode, selectedRecipes, manualItems,
+    };
+    const timer = setTimeout(() => {
+      if (draftHasContent(draft)) saveDraft(DRAFT_KEYS.producao, draft);
+      else clearDraft(DRAFT_KEYS.producao);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nome, tipo, data, convidados, clientId, fluxoMode, selectedRecipes, manualItems]);
+
+  const applyDraft = () => {
+    if (!pendingDraft) return;
+    const d = pendingDraft.data;
+    skipAutosave.current = true;
+    setNome(d.nome);
+    setTipo(d.tipo);
+    setData(d.data);
+    setConvidados(d.convidados);
+    setClientId(d.clientId);
+    setFluxoMode(d.fluxoMode);
+    setSelectedRecipes(d.selectedRecipes);
+    setManualItems(d.manualItems);
+    setPendingDraft(null);
+    setTimeout(() => (skipAutosave.current = false), 0);
+  };
+
+  const discardDraft = () => {
+    clearDraft(DRAFT_KEYS.producao);
+    setPendingDraft(null);
+    skipAutosave.current = false;
+  };
+
+  const resetForm = () => {
+    skipAutosave.current = true;
+    setNome("");
+    setTipo("");
+    setData("");
+    setConvidados("");
+    setClientId("");
+    setFluxoMode("recipe");
+    setSelectedRecipes([]);
+    setManualItems([{ nome: "", quantidadeTotal: "", unidade: "g" }]);
+    setSuggestion(null);
+    setError(null);
+    clearDraft(DRAFT_KEYS.producao);
+    setShowClearModal(false);
+    setTimeout(() => (skipAutosave.current = false), 0);
+  };
 
   const addManualItem = () => {
     setManualItems((prev) => [...prev, { nome: "", quantidadeTotal: "", unidade: "g" }]);
@@ -199,6 +283,8 @@ export default function NewProductionPage() {
       }
 
       const created = await apiPost<{ id: string }>("/productions", payload, token);
+      // produção salva: o rascunho cumpriu seu papel
+      clearDraft(DRAFT_KEYS.producao);
       // cai direto na requisição pronta — é o resultado que o usuário quer ver
       router.push(`/productions/${created.id}?tab=requisicao`);
     } catch (err) {
@@ -222,6 +308,39 @@ export default function NewProductionPage() {
         </div>
       </div>
 
+      {/* Rascunho encontrado */}
+      {pendingDraft && (
+        <div
+          data-testid="draft-banner"
+          className="flex flex-col sm:flex-row sm:items-center gap-3 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-800 rounded-xl p-4"
+        >
+          <div className="flex items-start gap-2 flex-1 text-sm text-info-800 dark:text-info-300">
+            <History className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              Você tinha um preenchimento em andamento{" "}
+              <strong>({formatDraftAge(pendingDraft.updatedAt)})</strong>:{" "}
+              {pendingDraft.data.nome || "produção sem nome"}. Continuar de onde parou?
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={applyDraft}
+              data-testid="draft-resume"
+              className="px-4 py-1.5 bg-primary-600 text-text-inverse rounded-lg text-sm font-medium hover:bg-primary-700"
+            >
+              Continuar
+            </button>
+            <button
+              onClick={discardDraft}
+              data-testid="draft-discard"
+              className="px-4 py-1.5 border border-border-default rounded-lg text-sm text-text-secondary hover:text-text-primary"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg p-4 text-danger-700 dark:text-danger-300">
           {error}
@@ -231,7 +350,18 @@ export default function NewProductionPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic info */}
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">Informações</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-text-primary">Informações</h2>
+            <button
+              type="button"
+              onClick={() => setShowClearModal(true)}
+              data-testid="clear-form"
+              className="flex items-center gap-1.5 text-sm text-text-muted hover:text-danger-600 dark:hover:text-danger-400 transition-colors"
+            >
+              <Eraser className="w-4 h-4" />
+              Limpar
+            </button>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">
@@ -531,6 +661,45 @@ export default function NewProductionPage() {
           </button>
         </div>
       </form>
+
+      {/* Modal: começar do zero */}
+      {showClearModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowClearModal(false)}
+        >
+          <div
+            className="bg-bg-surface rounded-2xl border border-border-default p-6 max-w-md w-full space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-text-primary">Começar do zero?</h2>
+            <p className="text-sm text-text-secondary">
+              O preenchimento atual desta produção será apagado.{" "}
+              <strong className="text-text-primary">
+                As produções que você já salvou continuam lá
+              </strong>
+              , nada é excluído delas.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="px-4 py-2 border border-border-default rounded-lg text-sm text-text-secondary hover:text-text-primary"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={resetForm}
+                data-testid="confirm-clear"
+                className="px-4 py-2 bg-danger-600 text-text-inverse rounded-lg text-sm font-medium hover:bg-danger-700"
+              >
+                Sim, começar do zero
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

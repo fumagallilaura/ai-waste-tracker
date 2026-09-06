@@ -31,9 +31,15 @@ class TestToBaseUnit:
         assert qtd == 3
         assert unit == "unidade"
 
-    def test_invalid_unit(self):
-        with pytest.raises(ValueError, match="Unidade não suportada"):
-            to_base_unit(1, "xícara")
+    def test_custom_unit_passes_through(self):
+        # medida personalizada: sem conversão, a própria unidade vira base
+        qtd, unit = to_base_unit(2, "Xícara")
+        assert qtd == 2
+        assert unit == "xícara"
+
+    def test_empty_unit_rejected(self):
+        with pytest.raises(ValueError):
+            to_base_unit(1, "   ")
 
 
 class TestFromBaseUnit:
@@ -48,6 +54,10 @@ class TestFromBaseUnit:
     def test_incompatible_units(self):
         with pytest.raises(ValueError, match="Incompatible units"):
             from_base_unit(1000, "g", "L")
+
+    def test_custom_unit_not_convertible(self):
+        with pytest.raises(ValueError, match="Incompatible units"):
+            from_base_unit(3, "xícara", "g")
 
 
 class TestGetDisplayUnit:

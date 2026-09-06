@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.core.units import UNIT_CONVERSIONS
+from app.core.units import normalize_unit
 
 # ─── Auth Schemas ───────────────────────────────────────────────
 
@@ -51,9 +51,7 @@ class RecipeIngredientCreate(BaseModel):
     @field_validator("unidade")
     @classmethod
     def validate_unidade(cls, v: str) -> str:
-        if v not in UNIT_CONVERSIONS:
-            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
-        return v
+        return normalize_unit(v)
 
 
 class RecipeIngredientResponse(BaseModel):
@@ -98,6 +96,19 @@ class RecipeResponse(BaseModel):
 
 class RecipeImportRequest(BaseModel):
     url: str = Field(max_length=2048)
+
+
+class RecipeAiRequest(BaseModel):
+    prato: str = Field(max_length=255)
+    porcoes: int = Field(gt=0, le=1000)
+    observacoes: str | None = Field(default=None, max_length=500)
+
+
+class RecipeAiResponse(BaseModel):
+    nome: str
+    rendimento_base: int
+    tipo: str | None
+    ingredients: list[RecipeImportIngredient]
 
 
 class RecipeImportIngredient(BaseModel):
@@ -209,9 +220,7 @@ class WasteRecordCreate(BaseModel):
     @field_validator("unidade")
     @classmethod
     def validate_unidade(cls, v: str) -> str:
-        if v not in UNIT_CONVERSIONS:
-            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
-        return v
+        return normalize_unit(v)
 
 
 class WasteRecordUpdate(BaseModel):
@@ -338,9 +347,7 @@ class StockAdjustRequest(BaseModel):
     @field_validator("unidade")
     @classmethod
     def validate_unidade(cls, v: str) -> str:
-        if v not in UNIT_CONVERSIONS:
-            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
-        return v
+        return normalize_unit(v)
 
 
 class StockSetRequest(BaseModel):
@@ -351,9 +358,7 @@ class StockSetRequest(BaseModel):
     @field_validator("unidade")
     @classmethod
     def validate_unidade(cls, v: str) -> str:
-        if v not in UNIT_CONVERSIONS:
-            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
-        return v
+        return normalize_unit(v)
 
 
 # ─── Dashboard Schemas ──────────────────────────────────────────

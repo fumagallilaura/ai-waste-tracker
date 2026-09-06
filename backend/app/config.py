@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     # Rate Limiting
     rate_limit_login_per_minute: int = 5
     rate_limit_guest_per_minute: int = 60
+    # teto global por IP para toda a API (anti-abuso)
+    rate_limit_default_per_minute: int = 240
+
+    # Observabilidade/analytics: token para endpoints administrativos
+    admin_token: str = ""
+
+    # IA para gerar receitas: qualquer API OpenAI-compatible
+    # (OpenAI, Groq, OpenRouter, proxy da Cursor, etc.)
+    ai_api_key: str = ""
+    ai_base_url: str = "https://api.openai.com/v1"
+    ai_model: str = "gpt-4o-mini"
 
     # Cookies (Secure só em produção HTTPS)
     cookie_secure: bool = False

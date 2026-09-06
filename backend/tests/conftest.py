@@ -11,6 +11,7 @@ import os
 
 os.environ.setdefault("APP_DEBUG", "false")
 os.environ["APP_RATE_LIMIT_LOGIN_PER_MINUTE"] = "100000"
+os.environ["APP_RATE_LIMIT_DEFAULT_PER_MINUTE"] = "100000"
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402

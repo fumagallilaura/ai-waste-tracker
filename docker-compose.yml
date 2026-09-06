@@ -28,6 +28,7 @@ services:
       APP_JWT_PUBLIC_KEY_PATH: /tmp/public_key.pem
       APP_RATE_LIMIT_LOGIN_PER_MINUTE: "30"
       APP_RATE_LIMIT_GUEST_PER_MINUTE: "600"
+      APP_RATE_LIMIT_DEFAULT_PER_MINUTE: "3000"
       APP_CORS_ORIGINS: '["http://localhost:3000"]'
       APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       APP_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -48,6 +49,9 @@ services:
       dockerfile: Dockerfile
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api
+      NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+      NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
     ports:
       - "3000:3000"
     volumes:

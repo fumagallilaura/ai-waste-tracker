@@ -1,0 +1,1 @@
+{"nodes": [{"id": "pkg_squad_greenfield_python", "label": "squad-greenfield-python", "file_type": "code", "type": "package", "ecosystem": "python", "source_file": "tests/fixtures/greenfield-python/pyproject.toml", "source_location": "L1"}], "edges": []}

@@ -68,6 +68,27 @@ class RefreshToken(Base):
     user: Mapped[User] = relationship("User", back_populates="refresh_tokens")
 
 
+class AnalyticsEvent(Base):
+    """Evento de produto (funil/uso) para observabilidade e análise futura.
+
+    Nada de dados sensíveis: no máximo user_id e um metadado compacto.
+    """
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    metadata_json: Mapped[str] = mapped_column(String(1000), nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, server_default=func.now(), index=True
+    )
+
+
 class Recipe(Base):
     __tablename__ = "recipes"
 

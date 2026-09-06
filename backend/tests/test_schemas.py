@@ -106,9 +106,9 @@ class TestWasteSchemas:
         with pytest.raises(ValidationError):
             WasteRecordCreate(item="arroz", quantidade_consumida=-1, unidade="kg")
 
-    def test_rejects_unknown_unit(self):
-        with pytest.raises(ValidationError):
-            WasteRecordCreate(item="arroz", quantidade_consumida=1, unidade="xícara")
+    def test_accepts_custom_unit(self):
+        w = WasteRecordCreate(item="arroz", quantidade_consumida=1, unidade=" Xícara ")
+        assert w.unidade == "xícara"
 
 
 class TestClientSchemas:
@@ -131,9 +131,9 @@ class TestStockSchemas:
         s = StockAdjustRequest(ingrediente="arroz", unidade="kg", quantidade_delta=-2)
         assert s.quantidade_delta == -2
 
-    def test_rejects_unknown_unit(self):
-        with pytest.raises(ValidationError):
-            StockAdjustRequest(ingrediente="arroz", unidade="saca", quantidade_delta=1)
+    def test_accepts_custom_unit(self):
+        s = StockAdjustRequest(ingrediente="arroz", unidade="Saca", quantidade_delta=1)
+        assert s.unidade == "saca"
 
     def test_set_requires_non_negative(self):
         from app.schemas import StockSetRequest

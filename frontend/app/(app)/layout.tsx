@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/lib/theme";
 import { getCurrentUser, logout } from "@/lib/auth";
+import { identifyUser } from "@/components/Analytics";
 import { flushOutbox, onPendingChange, pendingCount } from "@/lib/offline";
 import { Sun, Moon, Settings, LogOut, CloudOff } from "lucide-react";
 
@@ -26,6 +27,8 @@ export default function AppLayout({
         router.replace("/login?expired=1");
         return;
       }
+      // métricas de produto (quando ativadas): uso associado ao id da conta
+      identifyUser(user.id, user.email);
       setChecked(true);
       setPending(await pendingCount());
     };
@@ -86,6 +89,12 @@ export default function AppLayout({
               className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
             >
               Produções
+            </Link>
+            <Link
+              href="/analises"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+            >
+              Análises
             </Link>
             <Link
               href="/clients"

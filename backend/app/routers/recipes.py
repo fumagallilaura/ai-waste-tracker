@@ -13,12 +13,15 @@ from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Recipe, RecipeIngredient, User
 from app.schemas import (
+    RecipeAiRequest,
+    RecipeAiResponse,
     RecipeCreate,
     RecipeImportRequest,
     RecipeImportResponse,
     RecipeResponse,
     RecipeUpdate,
 )
+from app.services.ai_service import generate_recipe
 from app.services.recipe_import_service import RecipeImportError, import_recipe_from_url
 
 router = APIRouter()
@@ -97,6 +100,17 @@ async def import_recipe(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from None
     return result
+
+
+@router.post("/generate-ai", response_model=RecipeAiResponse)
+@limiter.limit("5/minute")
+async def generate_recipe_with_ai(
+    request: Request,
+    data: RecipeAiRequest,
+    user: User = Depends(get_current_user),
+):
+    """Gera uma receita com IA para revisão antes de salvar."""
+    return await generate_recipe(data.prato, data.porcoes, data.observacoes)
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)

@@ -25,6 +25,10 @@ export default function PrivacyPage() {
           <li><strong>Dados de uso:</strong> receitas, produções, requisições, estoque, clientes e balanços de eventos</li>
           <li><strong>Dados de navegação:</strong> cookies essenciais para funcionamento do PWA</li>
           <li>
+            <strong>Métricas de uso (opcional):</strong> páginas visitadas e interações,
+            associadas ao id da sua conta quando logada — usadas só para melhorar o produto.
+          </li>
+          <li>
             <strong>Modo visitante (sem conta):</strong> para permitir 1 produção de teste
             sem cadastro, salvamos um identificador pseudônimo em cookie e o{" "}
             <strong>hash do seu IP</strong> (nunca o IP em claro) para limitar abusos.

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "pkg_squad_polyglot_fixture", "label": "squad-polyglot-fixture", "file_type": "code", "type": "package", "ecosystem": "python", "source_file": "tests/fixtures/discovery/polyglot/pyproject.toml", "source_location": "L1"}], "edges": []}

@@ -10,13 +10,14 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Client, Production, ProductionRecipe, User
+from app.models import Client, Production, ProductionRecipe, ShoppingListItem, User
 from app.schemas import (
     ProductionCreate,
     ProductionDetailResponse,
     ProductionResponse,
     ProductionUpdate,
 )
+from app.services import analytics
 
 router = APIRouter()
 
@@ -81,6 +82,9 @@ async def create_production(
         )
 
     await db.commit()
+    await analytics.track(
+        db, analytics.PRODUCTION_CREATED, user.id, tipo=production.tipo
+    )
     await db.refresh(production)
     return production
 
@@ -179,10 +183,37 @@ async def update_production(
         production.data = datetime.combine(data.data, datetime.min.time())
     if data.convidados is not None:
         production.convidados = data.convidados
-    if data.client_id is not None:
+    if "client_id" in data.model_fields_set:
+        # permite desvincular (null) além de trocar de cliente
         production.client_id = await _validate_client(db, data.client_id, user)
     if data.status is not None:
         production.status = data.status
+    if data.recipes is not None:
+        # edição completa da lista de receitas/itens (query explícita: lazy-load
+        # fora do contexto async levanta MissingGreenlet)
+        result = await db.execute(
+            select(ProductionRecipe).where(ProductionRecipe.production_id == production.id)
+        )
+        for old_pr in result.scalars().all():
+            await db.delete(old_pr)
+        await db.flush()
+        for item in data.recipes:
+            db.add(
+                ProductionRecipe(
+                    production_id=production.id,
+                    recipe_id=item.recipe_id,
+                    escala_fator=item.escala_fator,
+                    item_nome=item.item_nome,
+                    item_quantidade_base=item.item_quantidade_base,
+                    item_unidade=item.item_unidade,
+                )
+            )
+        # a lista antiga de compras não é mais válida: regenera na próxima consulta
+        result = await db.execute(
+            select(ShoppingListItem).where(ShoppingListItem.production_id == production.id)
+        )
+        for old_item in result.scalars().all():
+            await db.delete(old_item)
 
     await db.commit()
     await db.refresh(production)

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "pkg_squad_python_fixture", "label": "squad-python-fixture", "file_type": "code", "type": "package", "ecosystem": "python", "source_file": "tests/fixtures/discovery/python/pyproject.toml", "source_location": "L1"}], "edges": []}

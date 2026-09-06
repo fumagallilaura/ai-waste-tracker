@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { takeRecipePrefill } from "@/lib/prefill";
+import { DRAFT_KEYS, clearDraft, formatDraftAge, loadDraft, saveDraft } from "@/lib/drafts";
 import { toBaseUnit } from "@/lib/units";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Eraser, History } from "lucide-react";
 
 const UNIDADES = ["kg", "g", "L", "ml", "unidade"];
 const TIPOS = ["entrada", "principal", "sobremesa", "bebida", "acompanhamento"];
@@ -17,6 +18,21 @@ interface IngredientForm {
   quantidade: string;
   unidade: string;
   preco_unitario: string;
+}
+
+interface RecipeDraft {
+  nome: string;
+  rendimentoBase: string;
+  tipo: string;
+  ingredients: IngredientForm[];
+}
+
+function draftHasContent(draft: RecipeDraft): boolean {
+  return Boolean(
+    draft.nome.trim() ||
+    draft.rendimentoBase ||
+    draft.ingredients.some((i) => i.ingrediente.trim() || i.quantidade)
+  );
 }
 
 export default function NewRecipePage() {
@@ -29,24 +45,73 @@ export default function NewRecipePage() {
   ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<{
+    data: RecipeDraft;
+    updatedAt: number;
+  } | null>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const skipAutosave = useRef(true);
 
   useEffect(() => {
     const prefill = takeRecipePrefill();
-    if (!prefill) return;
-    setNome(prefill.nome);
-    setRendimentoBase(prefill.rendimento_base);
-    setTipo(prefill.tipo || "");
-    if (prefill.ingredients.length > 0) {
-      setIngredients(
-        prefill.ingredients.map((i) => ({
-          ingrediente: i.ingrediente,
-          quantidade: i.quantidade,
-          unidade: UNIDADES.includes(i.unidade) ? i.unidade : "g",
-          preco_unitario: i.preco_unitario || "",
-        }))
-      );
+    if (prefill) {
+      // vem do import: preenche direto e vira o rascunho vigente
+      skipAutosave.current = true;
+      setNome(prefill.nome);
+      setRendimentoBase(prefill.rendimento_base);
+      setTipo(prefill.tipo || "");
+      if (prefill.ingredients.length > 0) {
+        setIngredients(
+          prefill.ingredients.map((i) => ({
+            ingrediente: i.ingrediente,
+            quantidade: i.quantidade,
+            unidade: UNIDADES.includes(i.unidade) ? i.unidade : "g",
+            preco_unitario: i.preco_unitario || "",
+          }))
+        );
+      }
+      setTimeout(() => (skipAutosave.current = false), 0);
+      return;
     }
+
+    const draft = loadDraft<RecipeDraft>(DRAFT_KEYS.receita);
+    if (draft && draftHasContent(draft.data)) setPendingDraft(draft);
+    else skipAutosave.current = false;
   }, []);
+
+  // autosave do rascunho da receita
+  useEffect(() => {
+    if (skipAutosave.current) return;
+    const draft: RecipeDraft = { nome, rendimentoBase, tipo, ingredients };
+    const timer = setTimeout(() => {
+      if (draftHasContent(draft)) saveDraft(DRAFT_KEYS.receita, draft);
+      else clearDraft(DRAFT_KEYS.receita);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nome, rendimentoBase, tipo, ingredients]);
+
+  const applyDraft = () => {
+    if (!pendingDraft) return;
+    const d = pendingDraft.data;
+    skipAutosave.current = true;
+    setNome(d.nome);
+    setRendimentoBase(d.rendimentoBase);
+    setTipo(d.tipo);
+    setIngredients(d.ingredients);
+    setPendingDraft(null);
+    setTimeout(() => (skipAutosave.current = false), 0);
+  };
+
+  const resetForm = () => {
+    skipAutosave.current = true;
+    setNome("");
+    setRendimentoBase("");
+    setTipo("");
+    setIngredients([{ ingrediente: "", quantidade: "", unidade: "g", preco_unitario: "" }]);
+    clearDraft(DRAFT_KEYS.receita);
+    setShowClearModal(false);
+    setTimeout(() => (skipAutosave.current = false), 0);
+  };
 
   const addIngredient = () => {
     setIngredients((prev) => [
@@ -114,6 +179,7 @@ export default function NewRecipePage() {
       };
 
       await apiPost("/recipes", payload, token);
+      clearDraft(DRAFT_KEYS.receita);
       router.push("/recipes");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar receita");
@@ -140,10 +206,52 @@ export default function NewRecipePage() {
         </div>
       )}
 
+      {pendingDraft && (
+        <div
+          data-testid="recipe-draft-banner"
+          className="flex flex-col sm:flex-row sm:items-center gap-3 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-800 rounded-xl p-4"
+        >
+          <div className="flex items-start gap-2 flex-1 text-sm text-info-800 dark:text-info-300">
+            <History className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              Receita em andamento{" "}
+              <strong>({formatDraftAge(pendingDraft.updatedAt)})</strong>:{" "}
+              {pendingDraft.data.nome || "sem nome"}. Continuar?
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={applyDraft}
+              type="button"
+              className="px-4 py-1.5 bg-primary-600 text-text-inverse rounded-lg text-sm font-medium hover:bg-primary-700"
+            >
+              Continuar
+            </button>
+            <button
+              onClick={() => { clearDraft(DRAFT_KEYS.receita); setPendingDraft(null); skipAutosave.current = false; }}
+              type="button"
+              className="px-4 py-1.5 border border-border-default rounded-lg text-sm text-text-secondary hover:text-text-primary"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic info */}
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">Informações básicas</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-text-primary">Informações básicas</h2>
+            <button
+              type="button"
+              onClick={() => setShowClearModal(true)}
+              className="flex items-center gap-1.5 text-sm text-text-muted hover:text-danger-600 dark:hover:text-danger-400 transition-colors"
+            >
+              <Eraser className="w-4 h-4" />
+              Limpar
+            </button>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">
@@ -296,6 +404,45 @@ export default function NewRecipePage() {
           </button>
         </div>
       </form>
+
+      {showClearModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowClearModal(false)}
+        >
+          <div
+            className="bg-bg-surface rounded-2xl border border-border-default p-6 max-w-md w-full space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-text-primary">Começar do zero?</h2>
+            <p className="text-sm text-text-secondary">
+              O preenchimento atual desta receita será apagado.{" "}
+              <strong className="text-text-primary">
+                As receitas já salvas continuam lá
+              </strong>
+              , nada é excluído delas.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                type="button"
+                className="px-4 py-2 border border-border-default rounded-lg text-sm text-text-secondary hover:text-text-primary"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={resetForm}
+                type="button"
+                className="px-4 py-2 bg-danger-600 text-text-inverse rounded-lg text-sm font-medium hover:bg-danger-700"
+              >
+                Sim, começar do zero
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import IngredientStock, Production, User, WasteRecord
 from app.schemas import WasteRecordCreate, WasteRecordResponse, WasteRecordUpdate
+from app.services import analytics
 
 router = APIRouter()
 
@@ -97,6 +98,12 @@ async def create_waste_record(
     await _credit_returned_to_stock(db, user.id, record)
     _finalize(production, db)
     await db.commit()
+    await analytics.track(
+        db,
+        analytics.WASTE_REGISTERED,
+        user.id,
+        descartada=float(record.quantidade_descartada),
+    )
     await db.refresh(record)
     return record
 

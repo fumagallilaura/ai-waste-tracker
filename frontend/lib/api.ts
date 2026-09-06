@@ -68,6 +68,42 @@ async function refreshTokens(): Promise<boolean> {
   return refreshPromise;
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+async function fetchWithRetry(
+  url: string,
+  options: FetchOptions,
+  headers: Record<string, string>,
+  authed: boolean
+): Promise<Response> {
+  const isGet = !options.method || options.method === "GET";
+  const maxAttempts = isGet ? 3 : 1; // só GET é idempotente e vale retry automático
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}${url}`, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
+      if (RETRYABLE_STATUS.has(response.status) && attempt < maxAttempts - 1) {
+        await sleep(300 * 2 ** attempt);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts - 1) {
+        await sleep(300 * 2 ** attempt);
+        continue;
+      }
+    }
+  }
+  throw lastError ?? new Error("Request failed");
+}
+
 async function rawFetch(url: string, options: FetchOptions, authed: boolean): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -78,9 +114,9 @@ async function rawFetch(url: string, options: FetchOptions, authed: boolean): Pr
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${url}`, { ...options, headers, credentials: "include" });
+    response = await fetchWithRetry(url, options, headers, authed);
   } catch (error) {
-    // falha de rede (offline)
+    // falha de rede (offline) após esgotar os retries
     if (authed && options.method && options.method !== "GET") {
       const body = options.body ? JSON.parse(options.body as string) : undefined;
       await enqueue({ url, method: options.method as "POST", body, token: getToken() });

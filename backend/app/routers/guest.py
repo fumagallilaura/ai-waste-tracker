@@ -23,6 +23,7 @@ from app.db.session import get_db
 from app.models import Production, ProductionRecipe, ShoppingListItem, WasteRecord
 from app.routers.shopping import _generate_shopping_list
 from app.schemas import ProductionCreate, WasteRecordCreate
+from app.services import analytics
 
 router = APIRouter()
 
@@ -191,6 +192,7 @@ async def create_guest_production(
         )
 
     await db.commit()
+    await analytics.track(db, analytics.GUEST_TRIAL_CREATED, ip_hash=production.ip_hash)
 
     result = await db.execute(
         select(Production)

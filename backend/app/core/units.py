@@ -1,4 +1,9 @@
-"""Unit conversion for recipe ingredients."""
+"""Unit conversion for recipe ingredients.
+
+Unidades conhecidas (kg/g/L/ml/unidade) têm conversão para base. Qualquer outra
+string (ex.: "xícara", "colher") é aceita como medida personalizada: a própria
+unidade vira a base e as quantidades são tratadas sem conversão.
+"""
 
 from __future__ import annotations
 
@@ -10,38 +15,48 @@ UNIT_CONVERSIONS: dict[str, dict[str, float | str]] = {
     "unidade": {"base": "unidade", "factor": 1},
 }
 
+_CANONICAL_BY_LOWER: dict[str, str] = {k.lower(): k for k in UNIT_CONVERSIONS}
+
+
+def normalize_unit(unidade: str) -> str:
+    """Normaliza o texto de uma unidade.
+
+    Unidades conhecidas voltam na grafia canônica ("L", "kg"...). Qualquer outra
+    vira medida personalizada em minúsculas (ex.: "xícara", "colher de sopa").
+    """
+    cleaned = unidade.strip().lower()[:20]
+    if not cleaned:
+        raise ValueError("Unidade não pode ser vazia")
+    return _CANONICAL_BY_LOWER.get(cleaned, cleaned)
+
 
 def to_base_unit(quantidade: float, unidade: str) -> tuple[float, str]:
     """Convert a quantity to its base unit.
 
-    Returns (base_quantity, base_unit).
+    Unidades conhecidas convertem (kg→g, L→ml). Medidas personalizadas
+    (ex.: "xícara") voltam como estão — a quantidade é usada sem conversão.
     """
-    if unidade not in UNIT_CONVERSIONS:
-        raise ValueError(f"Unidade não suportada: {unidade}. Use: {list(UNIT_CONVERSIONS.keys())}")
-
-    conversion = UNIT_CONVERSIONS[unidade]
+    unit = normalize_unit(unidade)
+    conversion = UNIT_CONVERSIONS.get(unit)
+    if conversion is None:
+        return float(quantidade), unit
     # Numeric columns come back as Decimal; coerce so any numeric type works.
     base_qtd = float(quantidade) * float(conversion["factor"])
-    base_unit = str(conversion["base"])
-    return base_qtd, base_unit
+    return base_qtd, str(conversion["base"])
 
 
 def from_base_unit(base_qtd: float, base_unit: str, target_unit: str) -> float:
     """Convert from base unit to a target unit."""
-    if target_unit not in UNIT_CONVERSIONS:
-        raise ValueError(f"Unidade não suportada: {target_unit}")
-
-    target = UNIT_CONVERSIONS[target_unit]
-    if str(target["base"]) != base_unit:
+    target = UNIT_CONVERSIONS.get(normalize_unit(target_unit))
+    if target is None or str(target["base"]) != base_unit:
         raise ValueError(f"Incompatible units: {base_unit} -> {target_unit}")
-
     return base_qtd / float(target["factor"])
 
 
 def get_display_unit(base_qtd: float, base_unit: str) -> tuple[float, str]:
     """Get the most human-readable unit for a quantity.
 
-    E.g., 1500g -> 1.5kg, 500ml -> 500ml.
+    E.g., 1500g -> 1.5kg, 500ml -> 500ml. Medidas personalizadas ficam como estão.
     """
     if base_unit == "g" and base_qtd >= 1000:
         return base_qtd / 1000, "kg"
@@ -51,7 +66,7 @@ def get_display_unit(base_qtd: float, base_unit: str) -> tuple[float, str]:
 
 
 # Unidade de compra usada para precificação: sólidos por kg, líquidos por L,
-# itens contados por unidade.
+# itens contados por unidade. Medidas personalizadas são precificadas por si mesmas.
 PURCHASE_UNIT_BY_BASE: dict[str, str] = {
     "g": "kg",
     "ml": "L",
@@ -64,9 +79,10 @@ def ingredient_cost(
 ) -> float:
     """Cost of a base quantity given the price per purchase unit (kg/L/unidade).
 
-    E.g., 2500 g at R$ 12.00/kg -> 2.5 * 12.00 = 30.00.
+    E.g., 2500 g at R$ 12.00/kg -> 2.5 * 12.00 = 30.00. Medidas personalizadas
+    (ex.: "xícara") usam o preço informado por xícara diretamente.
     """
-    purchase_unit = PURCHASE_UNIT_BY_BASE[base_unit]
-    if purchase_unit == "unidade":
+    purchase_unit = PURCHASE_UNIT_BY_BASE.get(base_unit, base_unit)
+    if purchase_unit in ("unidade", base_unit):
         return base_qtd * preco_por_compra
     return (base_qtd / 1000) * preco_por_compra

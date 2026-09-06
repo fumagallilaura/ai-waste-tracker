@@ -43,20 +43,25 @@ class TestCreateRecipe:
         assert by_name["leite"]["unidade_base"] == "ml"
         assert float(by_name["leite"]["unidade_base_qtd"]) == 300
 
-    async def test_invalid_unit_returns_400(self, client):
+    async def test_custom_unit_accepted(self, client):
+        """Medidas personalizadas (xícara, colher...) são aceitas sem conversão."""
         auth = await register_user(client, "r2@b.com")
         response = await client.post(
             "/api/recipes/",
             headers=auth["headers"],
             json={
-                "nome": "X",
+                "nome": "Bolo de vó",
                 "rendimento_base": 1,
                 "ingredients": [
-                    {"ingrediente": "arroz", "quantidade": 1, "unidade": "xícara"}
+                    {"ingrediente": "farinha", "quantidade": 2, "unidade": "Xícara"}
                 ],
             },
         )
-        assert response.status_code in (400, 422)
+        assert response.status_code == 201, response.text
+        ingredient = response.json()["ingredients"][0]
+        assert ingredient["unidade"] == "xícara"
+        assert ingredient["unidade_base"] == "xícara"
+        assert float(ingredient["unidade_base_qtd"]) == 2
 
     async def test_requires_auth(self, client):
         response = await client.get("/api/recipes/")
@@ -133,3 +138,67 @@ class TestRecipeCRUD:
         assert copy["nome"] == "Original (cópia)"
         assert copy["id"] != recipe["id"]
         assert len(copy["ingredients"]) == 2
+
+
+class TestAiGeneration:
+    async def test_not_configured_returns_503(self, client):
+        auth = await register_user(client, "ai1@b.com")
+        resp = await client.post(
+            "/api/recipes/generate-ai", headers=auth["headers"],
+            json={"prato": "bolo de cenoura", "porcoes": 10})
+        assert resp.status_code == 503
+        assert "APP_AI_API_KEY" in resp.json()["detail"]
+
+    async def test_generated_recipe_is_structured(self, client, monkeypatch):
+        import app.routers.recipes as recipes_router
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "ai_api_key", "test-key")
+
+        async def fake_llm(prato, porcoes, observacoes):
+            return {
+                "nome": "Bolo de cenoura",
+                "rendimento_base": porcoes,
+                "tipo": "sobremesa",
+                "ingredients": [
+                    {
+                        "ingrediente": "cenoura", "quantidade": 300, "unidade": "g",
+                        "original": "cenoura: 300 g",
+                    },
+                    {
+                        "ingrediente": "ovos", "quantidade": 4, "unidade": "unidade",
+                        "original": "ovos: 4 unidade",
+                    },
+                ],
+            }
+
+        monkeypatch.setattr(recipes_router, "generate_recipe", fake_llm)
+        auth = await register_user(client, "ai2@b.com")
+        resp = await client.post(
+            "/api/recipes/generate-ai", headers=auth["headers"],
+            json={"prato": "bolo de cenoura", "porcoes": 10, "observacoes": "sem glúten"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["nome"] == "Bolo de cenoura"
+        assert body["rendimento_base"] == 10
+        assert body["tipo"] == "sobremesa"
+        assert len(body["ingredients"]) == 2
+        assert body["ingredients"][0]["unidade"] == "g"
+
+    async def test_llm_error_maps_to_502(self, client, monkeypatch):
+        from fastapi import HTTPException
+
+        import app.routers.recipes as recipes_router
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "ai_api_key", "test-key")
+
+        async def broken_llm(prato, porcoes, observacoes):
+            raise HTTPException(status_code=502, detail="O serviço de IA respondeu com erro. Tente novamente.")
+
+        monkeypatch.setattr(recipes_router, "generate_recipe", broken_llm)
+        auth = await register_user(client, "ai3@b.com")
+        resp = await client.post(
+            "/api/recipes/generate-ai", headers=auth["headers"],
+            json={"prato": "x", "porcoes": 1})
+        assert resp.status_code == 502

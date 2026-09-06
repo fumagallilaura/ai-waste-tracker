@@ -327,15 +327,16 @@ class TestWasteRecords:
         assert "bolo crú" in items
         assert float(items["bolo crú"]["quantidade"]) == 2
 
-    async def test_rejects_unknown_unit(self, client):
+    async def test_accepts_custom_unit(self, client):
         auth = await register_user(client, "w2c@b.com")
         production = await create_production(client, auth["headers"], nome="Evento X")
         resp = await client.post(
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
-            json={"item": "arroz", "quantidade_consumida": 1, "unidade": "panela"},
+            json={"item": "caldo", "quantidade_consumida": 2, "unidade": " Panela "},
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["unidade"] == "panela"
 
     async def test_update_and_delete_within_24h(self, client):
         auth = await register_user(client, "w3@b.com")
@@ -397,3 +398,52 @@ class TestWasteRecords:
             json={"custo_desperdicio": 5},
         )
         assert resp.status_code == 403
+
+
+class TestProductionEdit:
+    async def test_update_recipes_replaces_list(self, client):
+        """PUT com recipes substitui a lista e invalida a requisição antiga."""
+        auth = await register_user(client, "e1@b.com")
+        r1 = await create_recipe(client, auth["headers"], "Bolo", 1,
+            [{"ingrediente": "farinha", "quantidade": 500, "unidade": "g", "preco_unitario": 10}])
+        r2 = await create_recipe(client, auth["headers"], "Torta", 1,
+            [{"ingrediente": "acucar", "quantidade": 300, "unidade": "g", "preco_unitario": 5}])
+        production = await create_production(client, auth["headers"], nome="Editável",
+            recipes=[{"recipe_id": r1["id"], "escala_fator": 1}])
+
+        # gera a requisição antiga
+        resp = await client.get(
+            f"/api/productions/{production['id']}/shopping-list", headers=auth["headers"])
+        assert float(resp.json()[0]["quantidade_total"]) == 500
+
+        # edita: troca a receita e a escala
+        resp = await client.put(
+            f"/api/productions/{production['id']}", headers=auth["headers"],
+            json={"recipes": [{"recipe_id": r2["id"], "escala_fator": 2}]})
+        assert resp.status_code == 200, resp.text
+
+        detail = await client.get(
+            f"/api/productions/{production['id']}", headers=auth["headers"])
+        assert len(detail.json()["recipes"]) == 1
+
+        # requisição regenerada reflete a nova lista (600g de açúcar)
+        resp = await client.get(
+            f"/api/productions/{production['id']}/shopping-list?regenerate=true",
+            headers=auth["headers"])
+        items = {i["ingrediente"]: i for i in resp.json()}
+        assert "acucar" in items and "farinha" not in items
+        assert float(items["acucar"]["quantidade_total"]) == 600
+
+    async def test_update_client_can_unlink(self, client):
+        auth = await register_user(client, "e2@b.com")
+        client_ = await client.post("/api/clients/", headers=auth["headers"],
+            json={"nome": "Buffet X"})
+        production = await create_production(client, auth["headers"], nome="Vinculada",
+            client_id=client_.json()["id"])
+        assert production["client_id"] == client_.json()["id"]
+
+        resp = await client.put(
+            f"/api/productions/{production['id']}", headers=auth["headers"],
+            json={"client_id": None})
+        assert resp.status_code == 200
+        assert resp.json()["client_id"] is None

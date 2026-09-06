@@ -31,7 +31,20 @@ No fim do evento, registre para cada item:
 
 O primeiro balanço finaliza a produção e o custo do descartado alimenta o dashboard.
 
-### 3. Padrão de consumo por cliente
+### 3. Análises e inteligência
+
+A área **Análises** (menu do app) tem duas visões:
+
+- **Eventos**: cada evento finalizado comparado com a média dos eventos parecidos
+  (consumo e descarte, barras e desvio vs. média), com sugestões de ajuste.
+- **Dia a dia (comércio)**: para produções do tipo *Turno diário* (padaria, lanchonete...),
+  o app aprende o padrão **por item × dia da semana**, marca quando o item esgotou
+  (sinal de venda perdida) e sugere quanto produzir em cada dia.
+
+As sugestões são determinísticas e explicáveis; cada resposta de insights traz um
+`ai_context` estruturado, pronto para alimentar uma IA conversacional depois.
+
+### 4. Padrão de consumo por cliente
 
 - Cadastre **clientes/buffets** com um **fator de produção** (ex.: 0.7 = regra dos 70% —
   fazer 1 por pessoa sempre sobra).
@@ -106,9 +119,10 @@ Rodem em SQLite in-memory (não precisa de Postgres):
 docker compose run --rm backend pytest
 ```
 
-145 testes: unidades/conversões, security (JWT RS256 + argon2), schemas, receitas,
-produções, requisição com estoque, balanço 3-vias com devolução ao estoque, clientes
-(padronia de consumo + sugestão), estoque e dashboard.
+172 testes: unidades/conversões, security (JWT RS256 + argon2), schemas, receitas,
+produções, requisição com estoque, balanço 3-vias com devolução ao estoque, clientes,
+estoque, dashboard, insights (comparações e padrão semanal), rate limit global e
+métricas administrativas.
 
 ### Frontend — E2E com Playwright
 
@@ -121,8 +135,9 @@ npx playwright install chromium   # primeira vez
 npm run test:e2e
 ```
 
-15 cenários: landing, registro/login/logout, receita → produção (escala direta) →
-requisição → balanço → dashboard, estoque, clientes e importação de receita.
+21 cenários: landing, registro/login/logout, Google, fluxo visitante (trial + claim),
+sessão expirada, receita → produção (escala direta) → requisição → balanço → dashboard,
+estoque, clientes, rascunhos (retomar/descartar/limpar) e análises.
 
 Configure os alvos com `E2E_BASE_URL` (padrão `http://localhost:3000`).
 
@@ -134,6 +149,8 @@ Configure os alvos com `E2E_BASE_URL` (padrão `http://localhost:3000`).
 |----------|:---:|---|---|
 | `DB_PASSWORD` | ✅ | `devpassword` | Senha do PostgreSQL |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ❌ | vazio | Ativa o login/cadastro com Google |
+| `APP_ADMIN_TOKEN` | ❌ | vazio | Habilita `GET /api/metrics` e `/api/metrics/business` (header `X-Admin-Token`) |
+| `APP_RATE_LIMIT_DEFAULT_PER_MINUTE` | ❌ | `240` | Teto global de requisições por IP (anti-abuso) |
 
 **Sem `.env?** O `docker-compose.yml` usa valores padrão — funciona sem configurar nada para desenvolvimento.
 
@@ -202,6 +219,23 @@ docker compose exec frontend npm run typecheck
 # Reset do banco (destrói dados!)
 docker compose down -v && docker compose up --build
 ```
+
+---
+
+## Métricas de produto (opcional, grátis)
+
+Para saber quem acessou, quais páginas, quantas vezes e onde o pessoal trava, o app
+suporta duas ferramentas — ative uma ou ambas colando as chaves no `.env` (ou nas env
+vars da Vercel) e reiniciando o frontend. Sem chaves, nada é carregado.
+
+| Ferramenta | Custo | O que mostra | Como ativar |
+|---|---|---|---|
+| **PostHog** | Grátis até 1M eventos/mês | Quem acessou, páginas, funil, retenção; usuários identificados pelo id da conta | Crie o projeto em posthog.com → cole `NEXT_PUBLIC_POSTHOG_KEY` (e `NEXT_PUBLIC_POSTHOG_HOST` se usar a UE) |
+| **Microsoft Clarity** | Grátis, ilimitado | Gravações de sessão, heatmaps, **rage clicks** (onde o usuário trava/trava de raiva) | clarity.microsoft.com → cole `NEXT_PUBLIC_CLARITY_ID` |
+
+Recomendação: os dois juntos — PostHog responde "quem usa e onde para", Clarity mostra
+em vídeo "por que trava". Para métricas de negócio do SEU banco (funil de cadastro,
+trials, conversão), use `GET /api/metrics/business` com `APP_ADMIN_TOKEN`.
 
 ---
 

@@ -31,6 +31,7 @@ from app.schemas import (
     TokenResponse,
     UserResponse,
 )
+from app.services import analytics
 
 router = APIRouter()
 
@@ -56,7 +57,7 @@ def _issue_tokens(db: AsyncSession, user: User) -> TokenResponse:
 
 async def _claim_guest_productions(
     db: AsyncSession, user: User, request: Request, response
-) -> None:
+) -> int:
     """Associate the visitor's trial production(s) with the new account.
 
     The guest cookie (dz_guest) identifies productions created without login;
@@ -67,7 +68,7 @@ async def _claim_guest_productions(
 
     guest_id = request.cookies.get(GUEST_COOKIE)
     if not guest_id:
-        return
+        return 0
     guest_hash = hashlib.sha256(guest_id.encode()).hexdigest()
     result = await db.execute(
         select(Production).where(
@@ -80,6 +81,7 @@ async def _claim_guest_productions(
         production.user_id = user.id
     if claimed:
         response.delete_cookie(GUEST_COOKIE)
+    return len(claimed)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -109,7 +111,10 @@ async def register(
     await db.flush()
 
     tokens = _issue_tokens(db, user)
-    await _claim_guest_productions(db, user, request, response)
+    claimed = await _claim_guest_productions(db, user, request, response)
+    await analytics.track(db, analytics.SIGNUP_EMAIL, user.id)
+    if claimed:
+        await analytics.track(db, analytics.TRIAL_CONVERTED, user.id, claimed=claimed)
     await db.commit()
 
     return tokens
@@ -134,7 +139,9 @@ async def login(
         )
 
     tokens = _issue_tokens(db, user)
-    await _claim_guest_productions(db, user, request, response)
+    claimed = await _claim_guest_productions(db, user, request, response)
+    if claimed:
+        await analytics.track(db, analytics.TRIAL_CONVERTED, user.id, claimed=claimed)
     await db.commit()
 
     return tokens
@@ -399,6 +406,9 @@ async def google_callback(
     redirect_response = RedirectResponse(
         url=redirect_url, status_code=status.HTTP_303_SEE_OTHER
     )
-    await _claim_guest_productions(db, user, request, redirect_response)
+    claimed = await _claim_guest_productions(db, user, request, redirect_response)
+    await analytics.track(db, analytics.SIGNUP_GOOGLE, user.id)
+    if claimed:
+        await analytics.track(db, analytics.TRIAL_CONVERTED, user.id, claimed=claimed)
     await db.commit()
     return redirect_response

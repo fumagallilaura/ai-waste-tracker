@@ -61,3 +61,12 @@ test.describe("Autenticação › Google", () => {
     await expect(page.getByTestId("register-google")).toBeVisible();
   });
 });
+
+test.describe("Autenticação › Callback do Google", () => {
+  test("rota /auth/callback existe e trata retorno inválido", async ({ page }) => {
+    // sem fragmento = retorno inválido → página renderiza erro com link para o login
+    await page.goto("/auth/callback");
+    await expect(page.getByText(/Falha no login/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Voltar para o login" })).toBeVisible();
+  });
+});
