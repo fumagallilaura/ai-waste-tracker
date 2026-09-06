@@ -218,6 +218,9 @@ docker compose exec frontend npm run typecheck
 
 # Reset do banco (destrói dados!)
 docker compose down -v && docker compose up --build
+
+# Rodar Graphify
+start graphify-out/graph.html
 ```
 
 ---
@@ -248,3 +251,12 @@ terraform apply -var="db_password=$(openssl rand -hex 16)"
 ```
 
 Veja `infra/` para detalhes da infraestrutura (EC2, ALB, S3, SSM).
+
+---
+
+> Para adicionar Graphify em um repositório, rodar:
+>```cmd
+>graphify extract . --code-only
+>graphify cluster-only .
+>start graphify-out\graph.html # se for bash, rodar start graphify-out/graph.html
+>```
