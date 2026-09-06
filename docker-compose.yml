@@ -26,12 +26,13 @@ services:
       APP_DATABASE_URL: postgresql+asyncpg://desperdicio:${DB_PASSWORD:-devpassword}@postgres:5432/desperdicio_zero
       APP_JWT_PRIVATE_KEY_PATH: /tmp/private_key.pem
       APP_JWT_PUBLIC_KEY_PATH: /tmp/public_key.pem
-      APP_MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-TEST-placeholder}
-      APP_MERCADO_PAGO_SANDBOX: "true"
       APP_RATE_LIMIT_LOGIN_PER_MINUTE: "30"
-      APP_RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
-      APP_EMAIL_FROM: noreply@desperdiciozero.com.br
+      APP_RATE_LIMIT_GUEST_PER_MINUTE: "600"
       APP_CORS_ORIGINS: '["http://localhost:3000"]'
+      APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      APP_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      APP_GOOGLE_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+      APP_FRONTEND_URL: http://localhost:3000
     ports:
       - "8000:8000"
     volumes:

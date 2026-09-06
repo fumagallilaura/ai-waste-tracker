@@ -20,4 +20,5 @@ RUN python -c "from app.core.security import generate_rsa_key_pair; k=generate_r
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Apply pending migrations before serving so the schema is always current
+CMD ["sh", "-c", "PYTHONPATH=/app alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]

@@ -1,47 +1,27 @@
 import { expect, test } from "@playwright/test";
 
-const SEGMENTOS: Record<string, string> = {
-  restaurante: "Restaurante",
-  pizzaria: "Pizzaria",
-};
-
-test.describe("Landing — calculadora pública (SEO MVP, D007)", () => {
-  test("calcula CMV e perda estimada", async ({ page }) => {
+test.describe("Landing — apresentação do app", () => {
+  test("mostra proposta e funcionalidades principais", async ({ page }) => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { name: /Quanto você está/ })
+      page.getByRole("heading", { name: /Produza a quantidade certa/ })
     ).toBeVisible();
-
-    await page.locator("select").first().selectOption("restaurante");
-    await page.getByPlaceholder("Ex: 80000").fill("80000");
-    await page.getByPlaceholder("Ex: 28000").fill("32000");
-    await page.getByRole("button", { name: "Calcular desperdício" }).click();
-
-    const result = page.locator("text=Resultado").first();
-    await expect(result).toBeVisible();
-    // CMV 40% > ideal 35% → perda de R$ 4.000
-    await expect(page.getByText("Seu CMV", { exact: true })).toBeVisible();
-    await expect(page.getByText("40%")).toBeVisible();
-    await expect(page.getByText(/R\$ 4\.000/)).toBeVisible();
+    await expect(page.getByText("Evento → ingredientes")).toBeVisible();
+    await expect(page.getByText("Balanço do evento")).toBeVisible();
+    await expect(page.getByText("Padrão por cliente")).toBeVisible();
+    await expect(page.getByText("A regra dos 70%")).toBeVisible();
   });
 
   test("CTA leva ao cadastro", async ({ page }) => {
     await page.goto("/");
-    await page.locator("select").first().selectOption("pizzaria");
-    await page.getByPlaceholder("Ex: 80000").fill("50000");
-    await page.getByPlaceholder("Ex: 28000").fill("20000");
-    await page.getByRole("button", { name: "Calcular desperdício" }).click();
-
-    const cta = page.getByRole("link", { name: /Quer descobrir/ });
+    const cta = page.getByRole("link", { name: "Criar conta grátis" }).first();
     await expect(cta).toHaveAttribute("href", "/register");
   });
 
-  test("links de auth no header funcionam", async ({ page }) => {
+  test("links de auth funcionam", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "Entrar" }).click();
+    await page.getByRole("link", { name: "Entrar" }).first().click();
     await expect(page).toHaveURL(/\/login$/);
-    await page.getByRole("link", { name: "Criar conta grátis" }).click();
-    await expect(page).toHaveURL(/\/register$/);
   });
 });

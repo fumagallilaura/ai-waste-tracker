@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.units import from_base_unit, get_display_unit, to_base_unit
+from app.core.units import from_base_unit, get_display_unit, ingredient_cost, to_base_unit
 
 
 class TestToBaseUnit:
@@ -75,3 +75,19 @@ class TestGetDisplayUnit:
         qtd, unit = get_display_unit(5, "unidade")
         assert qtd == 5
         assert unit == "unidade"
+
+
+class TestIngredientCost:
+    def test_price_per_kg(self):
+        # 2.5 kg a R$ 12/kg
+        assert ingredient_cost(2500, "g", 12) == 30.0
+
+    def test_price_per_l(self):
+        # 900 ml a R$ 6/L
+        assert ingredient_cost(900, "ml", 6) == pytest.approx(5.4)
+
+    def test_price_per_unidade(self):
+        assert ingredient_cost(10, "unidade", 3.5) == 35.0
+
+    def test_zero_price(self):
+        assert ingredient_cost(5000, "g", 0) == 0

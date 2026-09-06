@@ -1,6 +1,6 @@
 /** Authentication utilities. */
 
-import { apiPost } from "./api";
+import { apiGet, apiPost } from "./api";
 
 export interface Tokens {
   access_token: string;
@@ -47,6 +47,14 @@ export async function register(email: string, password: string): Promise<Tokens>
   const tokens = await apiPost<Tokens>("/auth/register", { email, password });
   saveTokens(tokens);
   return tokens;
+}
+
+/** Redirects the browser to the Google consent screen. */
+export async function startGoogleLogin(): Promise<void> {
+  const { authorization_url } = await apiGet<{ authorization_url: string }>(
+    "/auth/google/url"
+  );
+  window.location.href = authorization_url;
 }
 
 export async function refreshAccessToken(): Promise<Tokens | null> {

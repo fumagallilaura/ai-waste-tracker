@@ -92,10 +92,14 @@ export default function ProductionsPage() {
             return (
               <Link
                 key={prod.id}
-                href={`/productions/${prod.id}`}
+                href={
+                  prod.status === "finalizado"
+                    ? `/productions/${prod.id}?tab=balanco`
+                    : `/productions/${prod.id}?tab=requisicao`
+                }
                 className="bg-bg-surface rounded-xl border border-border-default p-6 hover:border-primary-300 dark:hover:border-primary-700 transition-colors block"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <h3 className="text-lg font-semibold text-text-primary">{prod.nome}</h3>
@@ -116,12 +120,17 @@ export default function ProductionsPage() {
                     </div>
                   </div>
 
-                  {prod.status === "finalizado" && (
-                    <div className="text-right">
-                      <p className="text-xs text-text-muted">Ver detalhes</p>
-                      <p className="text-xs text-text-muted">→</p>
-                    </div>
-                  )}
+                  <span
+                    className={`text-xs whitespace-nowrap px-3 py-1.5 rounded-lg border ${
+                      prod.status === "finalizado"
+                        ? "border-border-default text-text-secondary"
+                        : "border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400"
+                    }`}
+                  >
+                    {prod.status === "finalizado"
+                      ? "Ver balanço →"
+                      : "Ver requisição →"}
+                  </span>
                 </div>
               </Link>
             );

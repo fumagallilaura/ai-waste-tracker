@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Production, Recipe, User
+from app.models import Client, IngredientStock, Production, Recipe, User
 
 router = APIRouter()
 
@@ -41,6 +41,14 @@ async def export_user_data(
         )
     )
     productions = productions_result.scalars().all()
+
+    # Fetch clients and stock
+    clients_result = await db.execute(select(Client).where(Client.user_id == user.id))
+    clients = clients_result.scalars().all()
+    stock_result = await db.execute(
+        select(IngredientStock).where(IngredientStock.user_id == user.id)
+    )
+    stock_items = stock_result.scalars().all()
 
     # Build export data
     export_data = {
@@ -95,17 +103,21 @@ async def export_user_data(
                         "ingrediente": sl.ingrediente,
                         "quantidade_total": float(sl.quantidade_total),
                         "unidade_base": sl.unidade_base,
+                        "quantidade_estoque": float(sl.quantidade_estoque),
+                        "quantidade_a_comprar": float(sl.quantidade_a_comprar),
+                        "preco_unitario": float(sl.preco_unitario),
                         "preco_estimado": float(sl.preco_estimado),
-                        "ja_tem_estoque": sl.ja_tem_estoque,
                     }
                     for sl in p.shopping_list
                 ],
                 "waste_records": [
                     {
-                        "ingrediente_ou_prato": wr.ingrediente_ou_prato,
-                        "quantidade_sobrou": float(wr.quantidade_sobrou),
+                        "item": wr.item,
+                        "quantidade_produzida": float(wr.quantidade_produzida),
+                        "quantidade_consumida": float(wr.quantidade_consumida),
+                        "quantidade_descartada": float(wr.quantidade_descartada),
+                        "quantidade_devolvida": float(wr.quantidade_devolvida),
                         "unidade": wr.unidade,
-                        "motivo": wr.motivo,
                         "custo_desperdicio": float(wr.custo_desperdicio),
                         "created_at": wr.created_at.isoformat(),
                     }
@@ -113,6 +125,25 @@ async def export_user_data(
                 ],
             }
             for p in productions
+        ],
+        "clients": [
+            {
+                "id": str(c.id),
+                "nome": c.nome,
+                "tipo": c.tipo,
+                "fator_producao": float(c.fator_producao),
+                "observacoes": c.observacoes,
+            }
+            for c in clients
+        ],
+        "stock": [
+            {
+                "ingrediente": s.ingrediente,
+                "unidade_base": s.unidade_base,
+                "quantidade": float(s.quantidade),
+                "preco_unitario": float(s.preco_unitario),
+            }
+            for s in stock_items
         ],
     }
 

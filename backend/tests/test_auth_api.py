@@ -114,3 +114,122 @@ class TestLogout:
 
         replay = await client.post("/api/auth/refresh", json={"refresh_token": refresh})
         assert replay.status_code == 401
+
+
+class TestGoogleOAuth:
+    async def test_url_not_configured_returns_503(self, client):
+        response = await client.get("/api/auth/google/url")
+        assert response.status_code == 503
+
+    async def test_url_returns_consent_url(self, client, monkeypatch):
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "google_client_id", "test-client-id")
+        monkeypatch.setattr(get_settings(), "google_client_secret", "test-secret")
+        response = await client.get("/api/auth/google/url")
+        assert response.status_code == 200
+        url = response.json()["authorization_url"]
+        assert "accounts.google.com" in url
+        assert "test-client-id" in url
+        assert "state=" in url
+
+    async def test_callback_rejects_invalid_state(self, client):
+        response = await client.get(
+            "/api/auth/google/callback",
+            params={"code": "abc", "state": "forged"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 400
+
+    async def test_callback_creates_user_and_redirects(self, client, monkeypatch):
+        import app.routers.auth as auth_router
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "frontend_url", "http://localhost:3000")
+
+        async def fake_exchange(code, settings):
+            return "google-access-token"
+
+        async def fake_userinfo(token):
+            return {
+                "email": "google.user@gmail.com",
+                "email_verified": True,
+                "name": "Google User",
+            }
+
+        monkeypatch.setattr(auth_router, "_google_exchange_code", fake_exchange)
+        monkeypatch.setattr(auth_router, "_google_userinfo", fake_userinfo)
+
+        state = auth_router._oauth_state_token()
+
+        response = await client.get(
+            "/api/auth/google/callback",
+            params={"code": "real-code", "state": state},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        location = response.headers["location"]
+        assert location.startswith("http://localhost:3000/auth/callback#")
+        fragment = location.split("#")[1]
+        params = dict(p.split("=", 1) for p in fragment.split("&"))
+        assert params["access_token"]
+        assert params["refresh_token"]
+
+        me = await client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {params['access_token']}"}
+        )
+        assert me.status_code == 200
+        assert me.json()["email"] == "google.user@gmail.com"
+
+    async def test_callback_reuses_existing_email(self, client, monkeypatch, session_factory):
+        from sqlalchemy import select
+
+        import app.routers.auth as auth_router
+        from app.models import User
+
+        await register_user(client, "existing@gmail.com")
+
+        async def fake_exchange(code, settings):
+            return "google-access-token"
+
+        async def fake_userinfo(token):
+            return {"email": "existing@gmail.com", "email_verified": True}
+
+        monkeypatch.setattr(auth_router, "_google_exchange_code", fake_exchange)
+        monkeypatch.setattr(auth_router, "_google_userinfo", fake_userinfo)
+
+        state = auth_router._oauth_state_token()
+
+        response = await client.get(
+            "/api/auth/google/callback",
+            params={"code": "code", "state": state},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+
+        async with session_factory() as session:
+            result = await session.execute(
+                select(User).where(User.email == "existing@gmail.com")
+            )
+            assert len(result.scalars().all()) == 1
+
+    async def test_callback_requires_verified_email(self, client, monkeypatch):
+        import app.routers.auth as auth_router
+
+        async def fake_exchange(code, settings):
+            return "google-access-token"
+
+        async def fake_userinfo(token):
+            return {"email": "unverified@gmail.com", "email_verified": False}
+
+        monkeypatch.setattr(auth_router, "_google_exchange_code", fake_exchange)
+        monkeypatch.setattr(auth_router, "_google_userinfo", fake_userinfo)
+
+        state = auth_router._oauth_state_token()
+
+        response = await client.get(
+            "/api/auth/google/callback",
+            params={"code": "code", "state": state},
+            follow_redirects=False,
+        )
+        assert response.status_code == 400

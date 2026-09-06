@@ -1,8 +1,44 @@
 # Desperdício Zero 🌱
 
-Gestão de desperdício alimentar para pequenos negócios. Receitas, eventos, lista de compras e controle de desperdício em 30 segundos.
+Controle de produção e estoque para quem faz comida sob encomenda (buffets, confeitarias,
+eventos). Receitas, eventos, lista de requisição de ingredientes, balanço de desperdício
+e padrão de consumo por cliente.
 
 **Stack:** Next.js 15 + FastAPI + PostgreSQL + AWS (Terraform)
+
+---
+
+## Como funciona
+
+### 1. Evento → ingredientes (requisição)
+
+- Cadastre **receitas** com rendimento e ingredientes (preço por kg/L/unidade).
+- Crie uma **produção** para o evento e informe **quantas vezes cada receita será feita**
+  (ex.: o evento precisa de 10 receitas do bolo → escala 10x), ou informe itens avulsos
+  com a quantidade total.
+- O app gera a **lista de requisição**: necessário − em estoque = pedir. O que você já
+  tem em estoque é descontado automaticamente (com ajuste manual se precisar).
+
+### 2. Balanço do evento (desperdício)
+
+No fim do evento, registre para cada item:
+
+| Destino | Significado |
+|---------|-------------|
+| **Consumido** | foi servido e comido |
+| **Descartado** | sobrou exposto e foi jogado fora |
+| **Devolvido** | voltou sem ser exposto → **volta para o estoque** |
+
+O primeiro balanço finaliza a produção e o custo do descartado alimenta o dashboard.
+
+### 3. Padrão de consumo por cliente
+
+- Cadastre **clientes/buffets** com um **fator de produção** (ex.: 0.7 = regra dos 70% —
+  fazer 1 por pessoa sempre sobra).
+- Com o histórico de balanços dos eventos finalizados, o app calcula o **padrão de
+  consumo** de cada cliente (média consumida por evento e por convidado).
+- Ao criar a próxima produção, use a **sugestão**: consumo médio por convidado ×
+  convidados + margem de segurança de 10%.
 
 ---
 
@@ -18,27 +54,41 @@ Gestão de desperdício alimentar para pequenos negócios. Receitas, eventos, li
 cp .env.example .env
 ```
 
-### 2. Suba tudo
+### 2. (Opcional) Ative o login com Google
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crie
+   credenciais **OAuth 2.0 → Aplicação da Web**.
+2. Em **URIs de redirecionamento autorizados**, adicione:
+   `http://localhost:8000/api/auth/google/callback`
+3. Preencha `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no `.env` da raiz e recrie o
+   backend para eles valerem: `docker compose up -d backend`.
+
+Sem isso o app funciona normalmente com email/senha — só o botão do Google avisa que falta configurar.
+
+### 3. Suba tudo
 
 ```bash
 docker compose up --build
 ```
 
-Isso sobe 3 containers:
+Isso sobe 3 containers (as migrações do banco rodam automaticamente no startup do backend):
+
 | Serviço | URL | Descrição |
 |---------|-----|-----------|
-| Frontend | http://localhost:3000 | Next.js (calculadora pública + app) |
+| Frontend | http://localhost:3000 | Next.js (app) |
 | Backend | http://localhost:8000 | FastAPI API + docs em `/docs` |
 | PostgreSQL | localhost:5432 | Banco de dados |
 
 ### 3. Acesse
 
-- **Calculadora pública:** http://localhost:3000
+- **App:** http://localhost:3000
 - **API docs (Swagger):** http://localhost:8000/docs
 - **Health check:** http://localhost:8000/api/health
 - **Importar receita:** `/recipes` → botão "Importar da internet" (cola a URL de uma receita pública; ingredientes são extraídos de dados estruturados JSON-LD do site e revisados antes de salvar)
 
-### 4. Rode as migrações do banco
+### 4. Rode as migrações do banco (se necessário)
+
+O backend já aplica as migrações no startup. Para rodar manualmente:
 
 ```bash
 docker compose exec backend alembic upgrade head
@@ -46,21 +96,21 @@ docker compose exec backend alembic upgrade head
 
 ---
 
-## Testes (Fase 5)
+## Testes
 
-### Backend — testes unitários + API (T24)
+### Backend — testes unitários + API
 
-Rodam em SQLite in-memory (não precisa de Postgres):
+Rodem em SQLite in-memory (não precisa de Postgres):
 
 ```bash
 docker compose run --rm backend pytest
 ```
 
-99 testes: unidades, benchmarks, security (JWT RS256 + argon2), schemas,
-services (Mercado Pago/Resend em modo dev) e API completa (auth com rotação
-de refresh token, receitas, produções, lista de compras, desperdício, dashboard).
+145 testes: unidades/conversões, security (JWT RS256 + argon2), schemas, receitas,
+produções, requisição com estoque, balanço 3-vias com devolução ao estoque, clientes
+(padronia de consumo + sugestão), estoque e dashboard.
 
-### Frontend — E2E com Playwright (T25)
+### Frontend — E2E com Playwright
 
 Com o stack rodando (`docker compose up -d`), no host:
 
@@ -71,8 +121,8 @@ npx playwright install chromium   # primeira vez
 npm run test:e2e
 ```
 
-10 cenários: calculadora pública, registro/login/logout, guarda de rota,
-receita → produção → lista de compras escalada → desperdício → dashboard.
+15 cenários: landing, registro/login/logout, receita → produção (escala direta) →
+requisição → balanço → dashboard, estoque, clientes e importação de receita.
 
 Configure os alvos com `E2E_BASE_URL` (padrão `http://localhost:3000`).
 
@@ -83,8 +133,7 @@ Configure os alvos com `E2E_BASE_URL` (padrão `http://localhost:3000`).
 | Variável | Obrigatório? | Padrão (dev) | Descrição |
 |----------|:---:|---|---|
 | `DB_PASSWORD` | ✅ | `devpassword` | Senha do PostgreSQL |
-| `MERCADO_PAGO_ACCESS_TOKEN` | ❌ | `TEST-placeholder` | Token sandbox do Mercado Pago |
-| `RESEND_API_KEY` | ❌ | `re_placeholder` | API key do Resend (emails) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ❌ | vazio | Ativa o login/cadastro com Google |
 
 **Sem `.env?** O `docker-compose.yml` usa valores padrão — funciona sem configurar nada para desenvolvimento.
 
@@ -104,10 +153,8 @@ O app suporta **3 modos de tema** (salvos em `localStorage`):
 - **Emerald** (`#059669`) — cor primária (economia, sucesso, CTAs)
 - **Amber** (`#F59E0B`) — desperdício, alerta
 - **Red** (`#EF4444`) — erro, desperdício crítico
-- **Superfícies quentes** no light mode — faz a comida "saltar" na tela
-- **Dark mode com warm undertone** — evita sensação clínica
 
-**Configurações:** Acesse `/settings` para trocar o tema, ver seu plano, e gerenciar dados (LGPD).
+**Configurações:** Acesse `/settings` para trocar o tema e gerenciar dados (LGPD).
 
 ---
 
@@ -116,17 +163,17 @@ O app suporta **3 modos de tema** (salvos em `localStorage`):
 ```
 ├── backend/          # FastAPI (Python 3.12)
 │   ├── app/
-│   │   ├── routers/  # Endpoints da API
-│   │   ├── models/   # SQLAlchemy models
+│   │   ├── routers/  # auth, recipes, clients, stock, productions, waste, dashboard
+│   │   ├── models/   # User, Recipe, Client, IngredientStock, Production, WasteRecord
 │   │   ├── schemas/  # Pydantic schemas
-│   │   ├── core/     # Security, units, benchmarks
+│   │   ├── core/     # security, units, rate limit
 │   │   └── db/       # DB session + Alembic migrations
 │   └── tests/
 ├── frontend/         # Next.js 15 (PWA)
 │   ├── app/
-│   │   ├── (public)/ # Calculadora pública (SEO)
+│   │   ├── (public)/ # Landing
 │   │   ├── (auth)/   # Login e registro
-│   │   └── (app)/    # App autenticado
+│   │   └── (app)/    # Dashboard, receitas, produções, clientes, estoque
 │   └── lib/          # API client, auth, units, theme
 ├── infra/            # Terraform (AWS)
 └── docker-compose.yml

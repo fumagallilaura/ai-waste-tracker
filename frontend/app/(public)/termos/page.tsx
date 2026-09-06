@@ -21,27 +21,27 @@ export default function TermsPage() {
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-text-primary">2. Descrição do serviço</h2>
         <p className="text-text-secondary">
-          O Desperdício Zero é uma plataforma de gestão de desperdício alimentar que permite:
+          O Desperdício Zero é uma ferramenta de controle de produção e estoque que permite:
         </p>
         <ul className="list-disc list-inside text-text-secondary space-y-2">
           <li>Cadastrar receitas com ingredientes e custos</li>
           <li>Planejar produções (eventos ou turnos diários)</li>
-          <li>Gerar listas de compras automáticas</li>
-          <li>Registrar e acompanhar desperdício</li>
-          <li>Visualizar métricas de economia</li>
+          <li>Gerar listas de requisição de ingredientes com base no estoque</li>
+          <li>Registrar o balanço dos eventos (consumido, descartado, devolvido)</li>
+          <li>Acompanhar o padrão de consumo de cada cliente</li>
         </ul>
+        <p className="text-text-secondary text-sm">
+          <strong>Modo visitante:</strong> sem cadastro, você pode criar 1 produção e
+          registrar 1 balanço para experimentar. Para criar mais, é necessário criar
+          conta (grátis). Ao criar conta, a produção do teste passa a ser sua.
+        </p>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold text-text-primary">3. Planos e pagamento</h2>
+        <h2 className="text-xl font-semibold text-text-primary">3. Uso do serviço</h2>
         <p className="text-text-secondary">
-          <strong>Plano Grátis:</strong> 1 produção por mês, receitas ilimitadas.
-          <br />
-          <strong>Plano Pro:</strong> R$19,90/mês ou R$149/ano — produções ilimitadas, insights e gamificação.
-        </p>
-        <p className="text-text-secondary">
-          O pagamento é processado pelo Mercado Pago. Não armazenamos dados de cartão de crédito.
-          Você pode cancelar a qualquer momento sem multa.
+          O serviço é gratuito e destinado ao controle das suas próprias operações.
+          Funcionalidades podem ser adicionadas ou ajustadas ao longo do tempo.
         </p>
       </section>
 
@@ -56,9 +56,9 @@ export default function TermsPage() {
           <li>Usar o serviço de forma legal e ética</li>
         </ul>
         <p className="text-text-secondary">
-          O Desperdício Zero fornece estimativas baseadas em dados de mercado.
-          Os valores de economia e desperdício são aproximados e não constituem
-          aconselhamento financeiro ou contábil.
+          As sugestões de produção e métricas de desperdício são estimativas calculadas
+          a partir dos dados que você registra e não constituem aconselhamento financeiro
+          ou contábil.
         </p>
       </section>
 

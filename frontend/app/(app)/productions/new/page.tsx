@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiGet, apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { Plus, Trash2, ArrowLeft, BookOpen, UtensilsCrossed } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, BookOpen, UtensilsCrossed, Sparkles } from "lucide-react";
 
 interface Recipe {
   id: string;
@@ -13,15 +13,27 @@ interface Recipe {
   rendimento_base: number;
 }
 
+interface ClientOption {
+  id: string;
+  nome: string;
+  fator_producao: number;
+}
+
+interface SuggestionItem {
+  item: string;
+  unidade_base: string;
+  quantidade_sugerida: number;
+}
+
 type FluxoMode = "recipe" | "manual";
 
 interface ManualItem {
   nome: string;
-  quantidadePorPessoa: string;
+  quantidadeTotal: string;
   unidade: string;
 }
 
-const UNIDADES = ["g", "ml", "unidade"];
+const UNIDADES = ["g", "kg", "ml", "L", "unidade"];
 const TIPOS_EVENTO = [
   "casamento",
   "corporativo",
@@ -39,35 +51,32 @@ export default function NewProductionPage() {
   const [tipo, setTipo] = useState("");
   const [data, setData] = useState("");
   const [convidados, setConvidados] = useState("");
+  const [clientId, setClientId] = useState("");
 
-  // Fluxo A: recipe-based
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  // Quantas vezes a receita será feita (ex.: 10 formas de bolo) — escala direta
   const [selectedRecipes, setSelectedRecipes] = useState<
     { recipeId: string; escalaFator: number }[]
   >([]);
 
-  // Fluxo B: manual items
   const [manualItems, setManualItems] = useState<ManualItem[]>([
-    { nome: "", quantidadePorPessoa: "", unidade: "g" },
+    { nome: "", quantidadeTotal: "", unidade: "g" },
   ]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
-
-    apiGet<Recipe[]>("/recipes", token)
-      .then(setRecipes)
-      .catch(() => {});
+    apiGet<Recipe[]>("/recipes", token).then(setRecipes).catch(() => {});
+    apiGet<ClientOption[]>("/clients", token).then(setClients).catch(() => {});
   }, []);
 
   const addManualItem = () => {
-    setManualItems((prev) => [
-      ...prev,
-      { nome: "", quantidadePorPessoa: "", unidade: "g" },
-    ]);
+    setManualItems((prev) => [...prev, { nome: "", quantidadeTotal: "", unidade: "g" }]);
   };
 
   const removeManualItem = (index: number) => {
@@ -89,8 +98,6 @@ export default function NewProductionPage() {
       if (exists) {
         return prev.filter((r) => r.recipeId !== recipeId);
       }
-      const recipe = recipes.find((r) => r.id === recipeId);
-      if (!recipe) return prev;
       return [...prev, { recipeId, escalaFator: 1 }];
     });
   };
@@ -99,6 +106,47 @@ export default function NewProductionPage() {
     setSelectedRecipes((prev) =>
       prev.map((r) => (r.recipeId === recipeId ? { ...r, escalaFator: fator } : r))
     );
+  };
+
+  const fetchSuggestion = async () => {
+    const token = getAccessToken();
+    const guests = convidados ? parseInt(convidados) : 0;
+    if (!token || !clientId || !guests) {
+      setSuggestion("Vincule um cliente e informe os convidados para receber a sugestão.");
+      return;
+    }
+    try {
+      const resp = await apiGet<{ itens: SuggestionItem[] }>(
+        `/clients/${clientId}/suggestion?convidados=${guests}`,
+        token
+      );
+      if (resp.itens.length === 0) {
+        setSuggestion(
+          "Sem histórico suficiente para este cliente (registre o balanço de eventos finalizados)."
+        );
+        return;
+      }
+      // Aplica a sugestão nos itens manuais correspondentes (por nome)
+      setManualItems((prev) =>
+        prev.map((item) => {
+          const match = resp.itens.find(
+            (s) => s.item.toLowerCase() === item.nome.trim().toLowerCase()
+          );
+          if (!match) return item;
+          const qtd = match.unidade_base === "g" || match.unidade_base === "ml"
+            ? match.quantidade_sugerida / 1000
+            : match.quantidade_sugerida;
+          const unit =
+            match.unidade_base === "g" ? "kg" : match.unidade_base === "ml" ? "L" : match.unidade_base;
+          return { ...item, quantidadeTotal: String(qtd), unidade: unit };
+        })
+      );
+      setSuggestion(
+        `Sugestão aplicada a ${resp.itens.length} item(ns) do histórico de consumo deste cliente (com margem de segurança).`
+      );
+    } catch {
+      setSuggestion("Não foi possível buscar a sugestão.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,32 +173,34 @@ export default function NewProductionPage() {
         tipo,
         data,
         convidados: convidados ? parseInt(convidados) : null,
+        client_id: clientId || null,
         recipes: [],
       };
 
       if (fluxoMode === "recipe") {
-        payload.recipes = selectedRecipes.map((sr) => {
-          const recipe = recipes.find((r) => r.id === sr.recipeId);
-          const numConvidados = convidados ? parseInt(convidados) : recipe?.rendimento_base || 1;
-          return {
-            recipe_id: sr.recipeId,
-            escala_fator: numConvidados / (recipe?.rendimento_base || 1),
-          };
-        });
+        payload.recipes = selectedRecipes.map((sr) => ({
+          recipe_id: sr.recipeId,
+          escala_fator: sr.escalaFator,
+        }));
       } else {
         payload.recipes = manualItems
-          .filter((item) => item.nome.trim() && item.quantidadePorPessoa)
-          .map((item) => ({
-            recipe_id: null,
-            escala_fator: convidados ? parseInt(convidados) : 1,
-            item_nome: item.nome.trim(),
-            item_quantidade_base: parseFloat(item.quantidadePorPessoa),
-            item_unidade: item.unidade,
-          }));
+          .filter((item) => item.nome.trim() && item.quantidadeTotal)
+          .map((item) => {
+            const [baseQtd, baseUnit] = toBase(item.quantidadeTotal, item.unidade);
+            const totalQtd = baseQtd;
+            return {
+              recipe_id: null,
+              escala_fator: 1,
+              item_nome: item.nome.trim(),
+              item_quantidade_base: totalQtd,
+              item_unidade: baseUnit,
+            };
+          });
       }
 
-      await apiPost("/productions", payload, token);
-      router.push("/productions");
+      const created = await apiPost<{ id: string }>("/productions", payload, token);
+      // cai direto na requisição pronta — é o resultado que o usuário quer ver
+      router.push(`/productions/${created.id}?tab=requisicao`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar produção");
     } finally {
@@ -167,7 +217,7 @@ export default function NewProductionPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Nova Produção</h1>
           <p className="text-text-secondary mt-1">
-            Crie um evento ou turno de operação.
+            Informe o evento e quantas vezes cada receita será feita — a lista de requisição sai pronta.
           </p>
         </div>
       </div>
@@ -197,7 +247,7 @@ export default function NewProductionPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Tipo</label>
               <select
@@ -227,7 +277,7 @@ export default function NewProductionPage() {
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">
-                Convidados / Pessoas
+                Convidados
               </label>
               <input
                 type="number"
@@ -238,12 +288,26 @@ export default function NewProductionPage() {
                 className="w-full px-4 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Cliente / Buffet</label>
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full px-4 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="">Sem vínculo</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Fluxo mode selector */}
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">Como vai servir?</h2>
+          <h2 className="text-lg font-semibold text-text-primary">O que vai produzir?</h2>
 
           <div className="grid grid-cols-2 gap-4">
             <button
@@ -257,23 +321,15 @@ export default function NewProductionPage() {
             >
               <BookOpen
                 className={`w-5 h-5 ${
-                  fluxoMode === "recipe"
-                    ? "text-primary-600 dark:text-primary-400"
-                    : "text-text-muted"
+                  fluxoMode === "recipe" ? "text-primary-600 dark:text-primary-400" : "text-text-muted"
                 }`}
               />
               <div className="text-left">
-                <p
-                  className={`text-sm font-medium ${
-                    fluxoMode === "recipe"
-                      ? "text-primary-700 dark:text-primary-300"
-                      : "text-text-primary"
-                  }`}
-                >
+                <p className={`text-sm font-medium ${fluxoMode === "recipe" ? "text-primary-700 dark:text-primary-300" : "text-text-primary"}`}>
                   Usar receitas cadastradas
                 </p>
                 <p className="text-xs text-text-muted">
-                  Selecione receitas e escale automaticamente
+                  Escolha a receita e quantas vezes vai fazer
                 </p>
               </div>
             </button>
@@ -289,29 +345,21 @@ export default function NewProductionPage() {
             >
               <UtensilsCrossed
                 className={`w-5 h-5 ${
-                  fluxoMode === "manual"
-                    ? "text-primary-600 dark:text-primary-400"
-                    : "text-text-muted"
+                  fluxoMode === "manual" ? "text-primary-600 dark:text-primary-400" : "text-text-muted"
                 }`}
               />
               <div className="text-left">
-                <p
-                  className={`text-sm font-medium ${
-                    fluxoMode === "manual"
-                      ? "text-primary-700 dark:text-primary-300"
-                      : "text-text-primary"
-                  }`}
-                >
-                  Informar manualmente
+                <p className={`text-sm font-medium ${fluxoMode === "manual" ? "text-primary-700 dark:text-primary-300" : "text-text-primary"}`}>
+                  Informar itens diretamente
                 </p>
                 <p className="text-xs text-text-muted">
-                  Adicione itens e quantidades por pessoa
+                  Total a produzir por item (ex.: 5 opções de doce)
                 </p>
               </div>
             </button>
           </div>
 
-          {/* Fluxo A: Recipe selection */}
+          {/* Fluxo A: Recipe selection with direct scale */}
           {fluxoMode === "recipe" && (
             <div className="space-y-3">
               {recipes.length === 0 ? (
@@ -326,16 +374,12 @@ export default function NewProductionPage() {
                 </div>
               ) : (
                 recipes.map((recipe) => {
-                  const isSelected = selectedRecipes.some((r) => r.recipeId === recipe.id);
                   const selected = selectedRecipes.find((r) => r.recipeId === recipe.id);
-                  const numConvidados = convidados ? parseInt(convidados) : recipe.rendimento_base;
-                  const fator = numConvidados / recipe.rendimento_base;
-
                   return (
                     <div
                       key={recipe.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                        isSelected
+                      className={`flex items-center justify-between gap-4 p-3 rounded-lg border transition-colors ${
+                        selected
                           ? "border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20"
                           : "border-border-default"
                       }`}
@@ -343,35 +387,60 @@ export default function NewProductionPage() {
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
-                          checked={isSelected}
+                          checked={!!selected}
                           onChange={() => toggleRecipe(recipe.id)}
                           className="w-4 h-4 text-primary-600 rounded border-border-default focus:ring-primary-500"
                         />
                         <div>
                           <p className="text-sm font-medium text-text-primary">{recipe.nome}</p>
                           <p className="text-xs text-text-muted">
-                            Rende {recipe.rendimento_base} porções
+                            Rende {recipe.rendimento_base} por receita
                           </p>
                         </div>
                       </div>
-                      {isSelected && convidados && (
-                        <div className="text-right">
-                          <p className="text-xs text-text-muted">Escala</p>
-                          <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
-                            {fator.toFixed(1)}x ({numConvidados} porções)
-                          </p>
+                      {selected && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-text-muted whitespace-nowrap">
+                            Quantas vezes fazer:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={selected.escalaFator}
+                            onChange={(e) =>
+                              updateEscalaFator(recipe.id, parseFloat(e.target.value) || 1)
+                            }
+                            className="w-20 px-2 py-1.5 border border-border-default rounded bg-bg-surface text-text-primary text-sm text-center"
+                          />
+                          <span className="text-xs text-text-muted">x</span>
                         </div>
                       )}
                     </div>
                   );
                 })
               )}
+              <p className="text-xs text-text-muted">
+                Ex.: o evento precisa de 10 receitas do bolo? Marque o bolo e coloque 10.
+              </p>
             </div>
           )}
 
-          {/* Fluxo B: Manual items */}
+          {/* Fluxo B: Manual items (total a produzir) */}
           {fluxoMode === "manual" && (
             <div className="space-y-3">
+              {clients.length > 0 && (
+                <button
+                  type="button"
+                  onClick={fetchSuggestion}
+                  className="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Sugerir quantidades do histórico do cliente
+                </button>
+              )}
+              {suggestion && <p className="text-xs text-text-muted">{suggestion}</p>}
+
               {manualItems.map((item, index) => (
                 <div
                   key={index}
@@ -383,23 +452,23 @@ export default function NewProductionPage() {
                       type="text"
                       value={item.nome}
                       onChange={(e) => updateManualItem(index, "nome", e.target.value)}
-                      placeholder="Ex: panacota, arroz, frango..."
+                      placeholder="Ex: brigadeiro, panacota..."
                       className="w-full px-3 py-2 border border-border-default rounded bg-bg-surface text-text-primary text-sm placeholder:text-text-muted focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
 
                   <div className="col-span-3">
                     <label className="block text-xs text-text-muted mb-1">
-                      Qtd por pessoa
+                      Quantidade total
                     </label>
                     <input
                       type="number"
-                      value={item.quantidadePorPessoa}
+                      value={item.quantidadeTotal}
                       onChange={(e) =>
-                        updateManualItem(index, "quantidadePorPessoa", e.target.value)
+                        updateManualItem(index, "quantidadeTotal", e.target.value)
                       }
-                      placeholder="Ex: 50"
-                      step="0.1"
+                      placeholder="Ex: 70"
+                      step="0.001"
                       min="0"
                       className="w-full px-3 py-2 border border-border-default rounded bg-bg-surface text-text-primary text-sm placeholder:text-text-muted focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
@@ -464,4 +533,13 @@ export default function NewProductionPage() {
       </form>
     </div>
   );
+}
+
+function toBase(qtd: string, unidade: string): [number, string] {
+  const v = parseFloat(qtd) || 0;
+  switch (unidade) {
+    case "kg": return [v * 1000, "g"];
+    case "L": return [v * 1000, "ml"];
+    default: return [v, unidade];
+  }
 }

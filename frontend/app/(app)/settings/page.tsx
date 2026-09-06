@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme, type ThemeMode } from "@/lib/theme";
 import { apiGet, apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -13,6 +13,11 @@ const THEMES: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "system", label: "Sistema", icon: Monitor },
 ];
 
+interface UserInfo {
+  email: string;
+  created_at: string;
+}
+
 export default function SettingsPage() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [exporting, setExporting] = useState(false);
@@ -20,6 +25,15 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    apiGet<UserInfo>("/auth/me", token)
+      .then(setUser)
+      .catch(() => {});
+  }, []);
 
   const handleExport = async () => {
     setExporting(true);
@@ -159,21 +173,17 @@ export default function SettingsPage() {
       <section className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
         <h2 className="text-lg font-semibold text-text-primary">Conta</h2>
         <div className="space-y-3">
-          <div className="flex items-center justify-between py-2 border-b border-border-default">
-            <span className="text-text-secondary text-sm">Plano atual</span>
-            <span className="text-text-primary font-medium text-sm">Grátis</span>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-text-secondary text-sm">Email</span>
+            <span className="text-text-primary font-medium text-sm">{user?.email ?? "—"}</span>
           </div>
           <div className="flex items-center justify-between py-2">
-            <span className="text-text-secondary text-sm">Eventos este mês</span>
-            <span className="text-text-primary font-medium text-sm">0 / 1</span>
+            <span className="text-text-secondary text-sm">Membro desde</span>
+            <span className="text-text-primary font-medium text-sm">
+              {user ? new Date(user.created_at).toLocaleDateString("pt-BR") : "—"}
+            </span>
           </div>
         </div>
-        <Link
-          href="/upgrade"
-          className="block w-full text-center bg-primary-600 text-text-inverse py-2 rounded-lg font-medium hover:bg-primary-700 transition-colors"
-        >
-          Upgrade para Pro — R$19,90/mês
-        </Link>
       </section>
 
       {/* Data & Privacy (LGPD) */}

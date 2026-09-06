@@ -45,6 +45,7 @@ class RecipeIngredientCreate(BaseModel):
     ingrediente: str = Field(max_length=255)
     quantidade: float = Field(gt=0)
     unidade: str = Field(max_length=20)
+    # Preço por unidade de compra: R$/kg para g, R$/L para ml, R$/un para unidade
     preco_unitario: float = Field(ge=0, default=0)
 
     @field_validator("unidade")
@@ -130,6 +131,7 @@ class ProductionCreate(BaseModel):
     tipo: str = Field(max_length=50)
     data: date
     convidados: int | None = Field(default=None, gt=0)
+    client_id: uuid.UUID | None = None
     recipes: list[ProductionRecipeItem] = Field(default_factory=list)
 
 
@@ -138,6 +140,7 @@ class ProductionUpdate(BaseModel):
     tipo: str | None = Field(default=None, max_length=50)
     data: date | None = None
     convidados: int | None = Field(default=None, gt=0)
+    client_id: uuid.UUID | None = None
     status: str | None = None
     recipes: list[ProductionRecipeItem] | None = None
 
@@ -148,6 +151,7 @@ class ProductionResponse(BaseModel):
     tipo: str
     data: date
     convidados: int | None
+    client_id: uuid.UUID | None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -177,68 +181,190 @@ class ShoppingListItemResponse(BaseModel):
     ingrediente: str
     quantidade_total: float
     unidade_base: str
+    quantidade_estoque: float
+    quantidade_a_comprar: float
+    preco_unitario: float
     preco_estimado: float
-    ja_tem_estoque: bool
 
     model_config = {"from_attributes": True}
 
 
 class ShoppingListUpdateItem(BaseModel):
-    ja_tem_estoque: bool
+    """Ajuste manual da requisição (ex.: usuário sabe que tem mais em casa)."""
 
+    quantidade_a_comprar: float = Field(ge=0)
 
 # ─── Waste Record Schemas ───────────────────────────────────────
 
-WASTE_MOTIVOS = {
-    "produzi_demais",
-    "venceu",
-    "errei_receita",
-    "cliente_nao_comeu",
-    "outro",
-}
-
 
 class WasteRecordCreate(BaseModel):
-    ingrediente_ou_prato: str = Field(max_length=255)
-    quantidade_sobrou: float = Field(gt=0)
+    item: str = Field(max_length=255)
+    quantidade_produzida: float = Field(ge=0, default=0)
+    quantidade_consumida: float = Field(ge=0, default=0)
+    quantidade_descartada: float = Field(ge=0, default=0)
+    quantidade_devolvida: float = Field(ge=0, default=0)
     unidade: str = Field(max_length=20)
-    motivo: str
     custo_desperdicio: float = Field(ge=0, default=0)
 
-    @field_validator("motivo")
+    @field_validator("unidade")
     @classmethod
-    def validate_motivo(cls, v: str) -> str:
-        if v not in WASTE_MOTIVOS:
-            raise ValueError(f"Motivo must be one of {WASTE_MOTIVOS}")
+    def validate_unidade(cls, v: str) -> str:
+        if v not in UNIT_CONVERSIONS:
+            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
         return v
 
 
 class WasteRecordUpdate(BaseModel):
-    quantidade_sobrou: float | None = Field(default=None, gt=0)
+    quantidade_produzida: float | None = Field(default=None, ge=0)
+    quantidade_consumida: float | None = Field(default=None, ge=0)
+    quantidade_descartada: float | None = Field(default=None, ge=0)
+    quantidade_devolvida: float | None = Field(default=None, ge=0)
     custo_desperdicio: float | None = Field(default=None, ge=0)
 
 
 class WasteRecordResponse(BaseModel):
     id: uuid.UUID
-    ingrediente_ou_prato: str
-    quantidade_sobrou: float
+    item: str
+    quantidade_produzida: float
+    quantidade_consumida: float
+    quantidade_descartada: float
+    quantidade_devolvida: float
     unidade: str
-    motivo: str
     custo_desperdicio: float
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
+# ─── Client Schemas ─────────────────────────────────────────────
+
+CLIENT_TIPOS = {"cliente", "buffet"}
+
+
+class ClientCreate(BaseModel):
+    nome: str = Field(max_length=255)
+    tipo: str = "cliente"
+    fator_producao: float = Field(ge=0, le=1, default=0.7)
+    observacoes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("tipo")
+    @classmethod
+    def validate_tipo(cls, v: str) -> str:
+        if v not in CLIENT_TIPOS:
+            raise ValueError(f"Tipo must be one of {CLIENT_TIPOS}")
+        return v
+
+
+class ClientUpdate(BaseModel):
+    nome: str | None = Field(default=None, max_length=255)
+    tipo: str | None = None
+    fator_producao: float | None = Field(default=None, ge=0, le=1)
+    observacoes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("tipo")
+    @classmethod
+    def validate_tipo(cls, v: str | None) -> str | None:
+        if v is not None and v not in CLIENT_TIPOS:
+            raise ValueError(f"Tipo must be one of {CLIENT_TIPOS}")
+        return v
+
+
+class ClientResponse(BaseModel):
+    id: uuid.UUID
+    nome: str
+    tipo: str
+    fator_producao: float
+    observacoes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ClientPatternItem(BaseModel):
+    item: str
+    unidade_base: str
+    eventos: int
+    media_produzida: float
+    media_consumida: float
+    media_descartada: float
+    media_devolvida: float
+    # consumo médio por convidado (unidade base); None quando eventos sem convidados
+    consumo_por_convidado: float | None
+
+
+class ClientPatternResponse(BaseModel):
+    client_id: uuid.UUID
+    nome: str
+    fator_producao: float
+    eventos_analisados: int
+    itens: list[ClientPatternItem]
+
+
+class SuggestionItem(BaseModel):
+    item: str
+    unidade_base: str
+    quantidade_sugerida: float
+    base_historica: float  # consumo médio que originou a sugestão
+
+
+class ProductionSuggestionResponse(BaseModel):
+    client_id: uuid.UUID
+    convidados: int | None
+    margem_aplicada: float
+    itens: list[SuggestionItem]
+
+# ─── Stock Schemas ──────────────────────────────────────────────
+
+
+class StockItemResponse(BaseModel):
+    id: uuid.UUID
+    ingrediente: str
+    unidade_base: str
+    quantidade: float
+    preco_unitario: float
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StockAdjustRequest(BaseModel):
+    """Movimentação de estoque. Quantidade positiva = entrada, negativa = saída."""
+
+    ingrediente: str = Field(max_length=255)
+    unidade: str = Field(max_length=20)
+    quantidade_delta: float
+    preco_unitario: float = Field(ge=0, default=0)
+
+    @field_validator("unidade")
+    @classmethod
+    def validate_unidade(cls, v: str) -> str:
+        if v not in UNIT_CONVERSIONS:
+            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
+        return v
+
+
+class StockSetRequest(BaseModel):
+    unidade: str = Field(max_length=20)
+    quantidade: float = Field(ge=0)
+    preco_unitario: float = Field(ge=0, default=0)
+
+    @field_validator("unidade")
+    @classmethod
+    def validate_unidade(cls, v: str) -> str:
+        if v not in UNIT_CONVERSIONS:
+            raise ValueError(f"Unidade não suportada: {v}. Use: {list(UNIT_CONVERSIONS)}")
+        return v
+
 
 # ─── Dashboard Schemas ──────────────────────────────────────────
 
 class DashboardMetrics(BaseModel):
-    economia_total: float
+    total_compras: float
     desperdicio_total: float
+    taxa_desperdicio: float  # % do valor comprado que virou descarte
     eventos_realizados: int
     desperdicio_medio_por_evento: float
-    economia_medio_por_evento: float
-    periodo: str  # "mes_atual", "ultimos_30_dias", etc.
+    periodo: str  # "mes_atual", "ultimos_30_dias"
 
 
 class DashboardHistoryItem(BaseModel):
@@ -247,22 +373,7 @@ class DashboardHistoryItem(BaseModel):
     tipo: str
     data: date
     status: str
+    cliente: str | None
     custo_compras: float
     custo_desperdicio: float
-    economia: float
-
-
-# ─── Payment Schemas ────────────────────────────────────────────
-
-class CheckoutRequest(BaseModel):
-    plan: str  # "pro_mensal" or "pro_anual"
-
-
-class CheckoutResponse(BaseModel):
-    preference_id: str
-    init_point: str  # URL for checkout
-
-
-class WebhookEvent(BaseModel):
-    type: str
-    data: dict
+    consumo_total: float  # % consumido sobre o registrado no balanço

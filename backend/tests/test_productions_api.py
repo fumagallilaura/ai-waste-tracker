@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
 from tests.conftest import register_user
 
 TODAY = date.today()
@@ -135,7 +137,7 @@ class TestShoppingListFluxoA:
         assert len(items) == 1
         assert float(items[0]["quantidade_total"]) == 30
 
-    async def test_marks_item_in_stock(self, client):
+    async def test_adjusts_requisition_manually(self, client):
         auth = await register_user(client, "s3@b.com")
         recipe = await create_recipe(
             client, auth["headers"], "Arroz", 1,
@@ -156,10 +158,97 @@ class TestShoppingListFluxoA:
         resp = await client.put(
             f"/api/productions/{production['id']}/shopping-list/{item_id}",
             headers=auth["headers"],
-            json={"ja_tem_estoque": True},
+            json={"quantidade_a_comprar": 0},
         )
         assert resp.status_code == 200
-        assert resp.json()["ja_tem_estoque"] is True
+        assert float(resp.json()["quantidade_a_comprar"]) == 0
+
+
+class TestShoppingListRequisition:
+    async def test_requisition_deducts_stock(self, client):
+        """Requisição = necessário - estoque (fluxo de requisição do cliente)."""
+        auth = await register_user(client, "r1@b.com")
+        recipe = await create_recipe(
+            client, auth["headers"], "Bolo", 1,
+            [{"ingrediente": "farinha", "quantidade": 500, "unidade": "g", "preco_unitario": 12}],
+        )
+        # entrada de 1.2 kg de farinha no estoque
+        resp = await client.post(
+            "/api/stock/",
+            headers=auth["headers"],
+            json={"ingrediente": "farinha", "unidade": "kg", "quantidade_delta": 1.2},
+        )
+        assert resp.status_code == 201, resp.text
+
+        production = await create_production(
+            client,
+            auth["headers"],
+            nome="Evento 10 bolos",
+            recipes=[{"recipe_id": recipe["id"], "escala_fator": 10}],
+        )
+        resp = await client.get(
+            f"/api/productions/{production['id']}/shopping-list", headers=auth["headers"]
+        )
+        item = resp.json()[0]
+        assert float(item["quantidade_total"]) == 5000
+        assert float(item["quantidade_estoque"]) == 1200
+        assert float(item["quantidade_a_comprar"]) == 3800
+        # preço: 3.8 kg × R$ 12/kg
+        assert float(item["preco_estimado"]) == pytest.approx(45.6)
+
+    async def test_requisition_never_negative(self, client):
+        auth = await register_user(client, "r2@b.com")
+        recipe = await create_recipe(
+            client, auth["headers"], "Bolo", 1,
+            [{"ingrediente": "acucar", "quantidade": 300, "unidade": "g", "preco_unitario": 5}],
+        )
+        await client.post(
+            "/api/stock/",
+            headers=auth["headers"],
+            json={"ingrediente": "acucar", "unidade": "g", "quantidade_delta": 1000},
+        )
+        production = await create_production(
+            client,
+            auth["headers"],
+            nome="Evento pequeno",
+            recipes=[{"recipe_id": recipe["id"], "escala_fator": 1}],
+        )
+        resp = await client.get(
+            f"/api/productions/{production['id']}/shopping-list", headers=auth["headers"]
+        )
+        item = resp.json()[0]
+        assert float(item["quantidade_a_comprar"]) == 0
+        assert float(item["preco_estimado"]) == 0
+
+    async def test_regenerate_recomputes_stock_snapshot(self, client):
+        auth = await register_user(client, "r3@b.com")
+        recipe = await create_recipe(
+            client, auth["headers"], "Bolo", 1,
+            [{"ingrediente": "leite", "quantidade": 1, "unidade": "L", "preco_unitario": 6}],
+        )
+        production = await create_production(
+            client,
+            auth["headers"],
+            nome="Evento leite",
+            recipes=[{"recipe_id": recipe["id"], "escala_fator": 2}],
+        )
+        first = await client.get(
+            f"/api/productions/{production['id']}/shopping-list", headers=auth["headers"]
+        )
+        assert float(first.json()[0]["quantidade_estoque"]) == 0
+
+        await client.post(
+            "/api/stock/",
+            headers=auth["headers"],
+            json={"ingrediente": "leite", "unidade": "L", "quantidade_delta": 0.5},
+        )
+        second = await client.get(
+            f"/api/productions/{production['id']}/shopping-list?regenerate=true",
+            headers=auth["headers"],
+        )
+        item = second.json()[0]
+        assert float(item["quantidade_estoque"]) == 500
+        assert float(item["quantidade_a_comprar"]) == 1500
 
 
 class TestShoppingListFluxoB:
@@ -190,7 +279,7 @@ class TestShoppingListFluxoB:
 
 
 class TestWasteRecords:
-    async def test_create_waste_finalizes_production(self, client):
+    async def test_balance_finalizes_production(self, client):
         auth = await register_user(client, "w1@b.com")
         production = await create_production(client, auth["headers"], nome="Evento W")
 
@@ -198,10 +287,12 @@ class TestWasteRecords:
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
             json={
-                "ingrediente_ou_prato": "arroz",
-                "quantidade_sobrou": 2.5,
+                "item": "arroz",
+                "quantidade_produzida": 5,
+                "quantidade_consumida": 2.5,
+                "quantidade_descartada": 2,
+                "quantidade_devolvida": 0.5,
                 "unidade": "kg",
-                "motivo": "produzi_demais",
                 "custo_desperdicio": 15.0,
             },
         )
@@ -213,18 +304,36 @@ class TestWasteRecords:
         assert detail.json()["status"] == "finalizado"
         assert len(detail.json()["waste_records"]) == 1
 
-    async def test_invalid_motivo_rejected(self, client):
-        auth = await register_user(client, "w2@b.com")
-        production = await create_production(client, auth["headers"], nome="Evento X")
+    async def test_devolvido_returns_to_stock(self, client):
+        """Devolvido (não exposto) volta ao estoque; descartado não."""
+        auth = await register_user(client, "w2b@b.com")
+        production = await create_production(client, auth["headers"], nome="Evento R")
         resp = await client.post(
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
             json={
-                "ingrediente_ou_prato": "arroz",
-                "quantidade_sobrou": 1,
-                "unidade": "kg",
-                "motivo": "invalido",
+                "item": "bolo crú",
+                "quantidade_produzida": 10,
+                "quantidade_consumida": 6,
+                "quantidade_descartada": 2,
+                "quantidade_devolvida": 2,
+                "unidade": "unidade",
             },
+        )
+        assert resp.status_code == 201
+
+        stock = await client.get("/api/stock/", headers=auth["headers"])
+        items = {i["ingrediente"]: i for i in stock.json()}
+        assert "bolo crú" in items
+        assert float(items["bolo crú"]["quantidade"]) == 2
+
+    async def test_rejects_unknown_unit(self, client):
+        auth = await register_user(client, "w2c@b.com")
+        production = await create_production(client, auth["headers"], nome="Evento X")
+        resp = await client.post(
+            f"/api/productions/{production['id']}/waste",
+            headers=auth["headers"],
+            json={"item": "arroz", "quantidade_consumida": 1, "unidade": "panela"},
         )
         assert resp.status_code == 422
 
@@ -235,10 +344,11 @@ class TestWasteRecords:
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
             json={
-                "ingrediente_ou_prato": "feijao",
-                "quantidade_sobrou": 1,
+                "item": "feijao",
+                "quantidade_produzida": 3,
+                "quantidade_consumida": 2,
+                "quantidade_descartada": 1,
                 "unidade": "kg",
-                "motivo": "venceu",
                 "custo_desperdicio": 8.0,
             },
         )
@@ -264,10 +374,9 @@ class TestWasteRecords:
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
             json={
-                "ingrediente_ou_prato": "bolo",
-                "quantidade_sobrou": 1,
+                "item": "bolo",
+                "quantidade_consumida": 1,
                 "unidade": "unidade",
-                "motivo": "cliente_nao_comeu",
             },
         )
         record_id = resp.json()["id"]

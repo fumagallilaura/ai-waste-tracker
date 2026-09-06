@@ -23,10 +23,11 @@ async def make_finalized_production_with_waste(client, headers, custo: float):
         f"/api/productions/{production_id}/waste",
         headers=headers,
         json={
-            "ingrediente_ou_prato": "arroz",
-            "quantidade_sobrou": 2,
+            "item": "arroz",
+            "quantidade_produzida": 4,
+            "quantidade_consumida": 2,
+            "quantidade_descartada": 2,
             "unidade": "kg",
-            "motivo": "produzi_demais",
             "custo_desperdicio": custo,
         },
     )
@@ -47,6 +48,7 @@ class TestDashboardMetrics:
         assert response.status_code == 200
         body = response.json()
         assert body["desperdicio_total"] == 0
+        assert body["total_compras"] == 0
         assert body["eventos_realizados"] == 0
 
     async def test_metrics_after_waste(self, client):
@@ -59,6 +61,58 @@ class TestDashboardMetrics:
         assert body["eventos_realizados"] == 2
         assert body["desperdicio_total"] == 50.0
         assert body["desperdicio_medio_por_evento"] == 25.0
+
+    async def test_metrics_with_shopping_costs(self, client):
+        """Taxa de desperdício usa o valor real da requisição."""
+        auth = await register_user(client, "d2b@b.com")
+        recipe = await client.post(
+            "/api/recipes/",
+            headers=auth["headers"],
+            json={
+                "nome": "Bolo",
+                "rendimento_base": 1,
+                "ingredients": [
+                    {
+                        "ingrediente": "farinha",
+                        "quantidade": 1000,
+                        "unidade": "g",
+                        "preco_unitario": 10,
+                    }
+                ],
+            },
+        )
+        assert recipe.status_code == 201
+        recipe_id = recipe.json()["id"]
+        production = await client.post(
+            "/api/productions/",
+            headers=auth["headers"],
+            json={
+                "nome": "Evento compra",
+                "tipo": "casamento",
+                "data": date.today().isoformat(),
+                "recipes": [{"recipe_id": recipe_id, "escala_fator": 1}],
+            },
+        )
+        production_id = production.json()["id"]
+        await client.get(
+            f"/api/productions/{production_id}/shopping-list", headers=auth["headers"]
+        )
+        await client.post(
+            f"/api/productions/{production_id}/waste",
+            headers=auth["headers"],
+            json={
+                "item": "farinha",
+                "quantidade_produzida": 1,
+                "quantidade_descartada": 1,
+                "unidade": "kg",
+                "custo_desperdicio": 10.0,
+            },
+        )
+
+        body = (await client.get("/api/dashboard/metrics", headers=auth["headers"])).json()
+        assert body["total_compras"] == 10.0  # 1 kg × R$ 10/kg
+        assert body["desperdicio_total"] == 10.0
+        assert body["taxa_desperdicio"] == 100.0
 
     async def test_metrics_isolated_per_user(self, client):
         a = await register_user(client, "d3a@b.com")
@@ -90,8 +144,10 @@ class TestDashboardHistory:
         assert item["nome"] == "Evento"
         assert item["status"] == "finalizado"
         assert item["custo_desperdicio"] == 11.3
-        # custo_compras = desperdicio / 0.113 (D006 heuristic)
-        assert item["custo_compras"] == 100.0
+        # sem lista de compras gerada, custo_compras é 0 (nada inventado)
+        assert item["custo_compras"] == 0
+        # balanço: 2 consumido de 4 registrado (2+2) = 50%
+        assert item["consumo_total"] == 50.0
 
     async def test_history_respects_limit(self, client):
         auth = await register_user(client, "d6@b.com")

@@ -1,20 +1,66 @@
 from __future__ import annotations
 
-import contextlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.units import to_base_unit
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Production, User, WasteRecord
+from app.models import IngredientStock, Production, User, WasteRecord
 from app.schemas import WasteRecordCreate, WasteRecordResponse, WasteRecordUpdate
-from app.services.notification_service import send_waste_reminder
 
 router = APIRouter()
+
+
+async def _load_production(
+    db: AsyncSession, production_id: uuid.UUID, user: User
+) -> Production:
+    result = await db.execute(
+        select(Production).where(
+            Production.id == production_id, Production.user_id == user.id
+        )
+    )
+    production = result.scalar_one_or_none()
+    if production is None:
+        raise HTTPException(status_code=404, detail="Production not found")
+    return production
+
+
+async def _credit_returned_to_stock(
+    db: AsyncSession, user_id: uuid.UUID, record: WasteRecord
+) -> None:
+    """Devolvido (não exposto) volta para o estoque."""
+    if record.quantidade_devolvida <= 0:
+        return
+    qtd, base_unit = to_base_unit(record.quantidade_devolvida, record.unidade)
+    result = await db.execute(
+        select(IngredientStock).where(
+            IngredientStock.user_id == user_id,
+            func.lower(IngredientStock.ingrediente) == record.item.strip().lower(),
+        )
+    )
+    stock_item = result.scalar_one_or_none()
+    if stock_item is None:
+        stock_item = IngredientStock(
+            user_id=user_id,
+            ingrediente=record.item.strip(),
+            unidade_base=base_unit,
+            quantidade=qtd,
+        )
+        db.add(stock_item)
+    elif stock_item.unidade_base == base_unit:
+        stock_item.quantidade = float(stock_item.quantidade) + qtd
+
+
+def _finalize(production: Production, db: AsyncSession) -> None:
+    """Primeiro balanço registrado encerra a produção."""
+    if production.status != "finalizado":
+        production.status = "finalizado"
+        db.add(production)
 
 
 @router.post(
@@ -28,45 +74,31 @@ async def create_waste_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Register waste for a production."""
-    # Verify ownership
-    result = await db.execute(
-        select(Production).where(
-            Production.id == production_id, Production.user_id == user.id
-        )
-    )
-    production = result.scalar_one_or_none()
-    if production is None:
-        raise HTTPException(status_code=404, detail="Production not found")
+    """Register the post-event balance for one item.
 
-    waste_record = WasteRecord(
+    Consumido + descartado (exposto) + devolvido (não exposto). O devolvido
+    é creditado de volta no estoque. O primeiro balanço finaliza a produção.
+    """
+    production = await _load_production(db, production_id, user)
+
+    record = WasteRecord(
         production_id=production_id,
-        ingrediente_ou_prato=data.ingrediente_ou_prato,
-        quantidade_sobrou=data.quantidade_sobrou,
+        item=data.item,
+        quantidade_produzida=data.quantidade_produzida,
+        quantidade_consumida=data.quantidade_consumida,
+        quantidade_descartada=data.quantidade_descartada,
+        quantidade_devolvida=data.quantidade_devolvida,
         unidade=data.unidade,
-        motivo=data.motivo,
         custo_desperdicio=data.custo_desperdicio,
     )
-    db.add(waste_record)
+    db.add(record)
+    await db.flush()
+
+    await _credit_returned_to_stock(db, user.id, record)
+    _finalize(production, db)
     await db.commit()
-    await db.refresh(waste_record)
-
-    # Update production status to finalizado if not already
-    was_new = production.status != "finalizado"
-    if was_new:
-        production.status = "finalizado"
-        await db.commit()
-
-        # Send reminder email (first waste record = event finished).
-        # Don't fail the request if email fails.
-        with contextlib.suppress(Exception):
-            await send_waste_reminder(
-                user_email=user.email,
-                production_nome=production.nome,
-                production_data=production.data.strftime("%d/%m/%Y"),
-            )
-
-    return waste_record
+    await db.refresh(record)
+    return record
 
 
 @router.put(
@@ -80,7 +112,7 @@ async def update_waste_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update a waste record (only within 24h)."""
+    """Update a balance record (only within 24h). Stock deltas are not reverted."""
     result = await db.execute(
         select(WasteRecord).where(
             WasteRecord.id == record_id,
@@ -91,17 +123,22 @@ async def update_waste_record(
     if record is None:
         raise HTTPException(status_code=404, detail="Waste record not found")
 
-    # Check 24h window
     if record.created_at < datetime.now(UTC) - timedelta(hours=24):
         raise HTTPException(
             status_code=403,
             detail="Waste records can only be edited within 24 hours",
         )
 
-    if data.quantidade_sobrou is not None:
-        record.quantidade_sobrou = data.quantidade_sobrou
-    if data.custo_desperdicio is not None:
-        record.custo_desperdicio = data.custo_desperdicio
+    for field in (
+        "quantidade_produzida",
+        "quantidade_consumida",
+        "quantidade_descartada",
+        "quantidade_devolvida",
+        "custo_desperdicio",
+    ):
+        value = getattr(data, field)
+        if value is not None:
+            setattr(record, field, value)
 
     await db.commit()
     await db.refresh(record)
@@ -115,7 +152,7 @@ async def delete_waste_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Delete a waste record (only within 24h)."""
+    """Delete a balance record (only within 24h). Stock deltas are not reverted."""
     result = await db.execute(
         select(WasteRecord).where(
             WasteRecord.id == record_id,
@@ -126,7 +163,6 @@ async def delete_waste_record(
     if record is None:
         raise HTTPException(status_code=404, detail="Waste record not found")
 
-    # Check 24h window
     if record.created_at < datetime.now(UTC) - timedelta(hours=24):
         raise HTTPException(
             status_code=403,

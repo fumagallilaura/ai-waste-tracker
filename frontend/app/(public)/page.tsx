@@ -1,163 +1,105 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { getAccessToken } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { Calculator, TrendingDown, Package } from "lucide-react";
 
-const SEGMENTOS = [
-  { value: "restaurante", label: "Restaurante", cmvIdeal: "28-35%", desperdicioMedio: "11.3%" },
-  { value: "pizzaria", label: "Pizzaria", cmvIdeal: "25-32%", desperdicioMedio: "8.5%" },
-  { value: "hamburgueria", label: "Hamburgueria", cmvIdeal: "30-38%", desperdicioMedio: "10.0%" },
-  { value: "bar", label: "Bar / Pub", cmvIdeal: "22-28%", desperdicioMedio: "5.0%" },
-  { value: "cafeteria", label: "Cafeteria", cmvIdeal: "18-25%", desperdicioMedio: "7.0%" },
-  { value: "self_service", label: "Self-Service / Buffet", cmvIdeal: "32-40%", desperdicioMedio: "15.0%" },
-  { value: "buffet", label: "Buffet de Eventos", cmvIdeal: "30-38%", desperdicioMedio: "18.0%" },
-  { value: "dark_kitchen", label: "Dark Kitchen", cmvIdeal: "25-32%", desperdicioMedio: "9.0%" },
-];
+export default function LandingPage() {
+  const [loggedIn, setLoggedIn] = useState(false);
 
-export default function CalculadoraPage() {
-  const [segmento, setSegmento] = useState("");
-  const [faturamento, setFaturamento] = useState("");
-  const [custoInsumos, setCustoInsumos] = useState("");
-  const [resultado, setResultado] = useState<null | {
-    cmv: number;
-    cmvIdeal: string;
-    perdaMensal: number;
-    desperdicioEstimado: number;
-  }>(null);
-
-  const calcular = () => {
-    if (!faturamento || !custoInsumos || !segmento) return;
-
-    const f = parseFloat(faturamento);
-    const c = parseFloat(custoInsumos);
-    const cmv = (c / f) * 100;
-
-    const seg = SEGMENTOS.find((s) => s.value === segmento);
-    const cmvMax = parseFloat(seg!.cmvIdeal.split("-")[1]);
-    const desperdicioMedio = parseFloat(seg!.desperdicioMedio);
-
-    const perdaMensal = cmv > cmvMax ? (cmv - cmvMax) / 100 * f : 0;
-    const desperdicioEstimado = (desperdicioMedio / 100) * c;
-
-    setResultado({
-      cmv: Math.round(cmv * 10) / 10,
-      cmvIdeal: seg!.cmvIdeal,
-      perdaMensal: Math.round(perdaMensal),
-      desperdicioEstimado: Math.round(desperdicioEstimado),
-    });
-  };
+  useEffect(() => {
+    setLoggedIn(!!getAccessToken());
+  }, []);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <div className="text-center mb-12">
+    <div className="max-w-3xl mx-auto px-4 py-16">
+      <div className="text-center mb-16">
         <h1 className="text-4xl font-bold text-text-primary mb-4">
-          Quanto você está <span className="text-primary-600 dark:text-primary-400">jogando fora</span>?
+          Produza a quantidade certa. <span className="text-primary-600 dark:text-primary-400">Desperdice menos.</span>
         </h1>
         <p className="text-lg text-text-secondary">
-          Calcule seu CMV e descubra quanto dinheiro seu restaurante perde com desperdício.
+          Controle de produção e estoque para quem faz comida sob encomenda:
+          receitas, eventos, lista de requisição e padrão de consumo por cliente.
         </p>
-      </div>
-
-      <div className="bg-bg-surface rounded-2xl shadow-lg p-8 space-y-6 border border-border-default">
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-2">
-            Tipo de negócio
-          </label>
-          <select
-            value={segmento}
-            onChange={(e) => setSegmento(e.target.value)}
-            className="w-full px-4 py-3 border border-border-default rounded-lg bg-bg-surface text-text-primary focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            <option value="">Selecione...</option>
-            {SEGMENTOS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-2">
-            Faturamento mensal (R$)
-          </label>
-          <input
-            type="number"
-            value={faturamento}
-            onChange={(e) => setFaturamento(e.target.value)}
-            placeholder="Ex: 80000"
-            className="w-full px-4 py-3 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-2">
-            Custo mensal de insumos (R$)
-          </label>
-          <input
-            type="number"
-            value={custoInsumos}
-            onChange={(e) => setCustoInsumos(e.target.value)}
-            placeholder="Ex: 28000"
-            className="w-full px-4 py-3 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-
-        <button
-          onClick={calcular}
-          disabled={!segmento || !faturamento || !custoInsumos}
-          className="w-full bg-primary-600 text-text-inverse py-3 rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Calcular desperdício
-        </button>
-
-        {resultado && (
-          <div className="mt-6 p-6 bg-primary-50 dark:bg-primary-900/20 rounded-xl space-y-4 border border-primary-200 dark:border-primary-800">
-            <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-300">
-              Resultado
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-text-muted">Seu CMV</p>
-                <p className="text-2xl font-bold text-text-primary">
-                  {resultado.cmv}%
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">CMV ideal</p>
-                <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{resultado.cmvIdeal}%</p>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">Perda estimada/mês</p>
-                <p className="text-2xl font-bold text-danger-600 dark:text-danger-400">
-                  R$ {resultado.perdaMensal.toLocaleString("pt-BR")}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">Desperdício estimado/mês</p>
-                <p className="text-2xl font-bold text-warning-600 dark:text-warning-400">
-                  R$ {resultado.desperdicioEstimado.toLocaleString("pt-BR")}
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-primary-200 dark:border-primary-800">
+        <div className="mt-8 flex justify-center gap-4">
+          {loggedIn ? (
+            <Link
+              href="/dashboard"
+              className="bg-primary-600 text-text-inverse px-8 py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
+            >
+              Ir para o app
+            </Link>
+          ) : (
+            <>
               <Link
                 href="/register"
-                className="block text-center bg-primary-600 text-text-inverse py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
+                className="bg-primary-600 text-text-inverse px-8 py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
               >
-                Quer descobrir onde está perdendo dinheiro? →
+                Criar conta grátis
               </Link>
-            </div>
-          </div>
-        )}
+              <Link
+                href="/comecar"
+                data-testid="landing-trial"
+                className="bg-bg-surface text-text-primary px-8 py-3 rounded-lg font-medium border border-border-default hover:border-primary-400 transition-colors"
+              >
+                Testar sem cadastro
+              </Link>
+              <Link
+                href="/login"
+                className="bg-bg-surface text-text-primary px-8 py-3 rounded-lg font-medium border border-border-default hover:border-border-strong transition-colors"
+              >
+                Entrar
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="mt-12 text-center text-sm text-text-muted">
-        <p>
-          Dados de referência: SEBRAE, ABRASEL e benchmarks da indústria de food service brasileira.
+      <div className="grid gap-6 md:grid-cols-3 mb-16">
+        <div className="bg-bg-surface rounded-2xl p-6 border border-border-default">
+          <Calculator className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-4" />
+          <h2 className="font-semibold text-text-primary mb-2">Evento → ingredientes</h2>
+          <p className="text-sm text-text-secondary">
+            O evento precisa de 10 receitas do bolo? Informe a quantidade e receba a
+            lista de ingredientes para requisição, já descontando o que você tem em estoque.
+          </p>
+        </div>
+
+        <div className="bg-bg-surface rounded-2xl p-6 border border-border-default">
+          <TrendingDown className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-4" />
+          <h2 className="font-semibold text-text-primary mb-2">Balanço do evento</h2>
+          <p className="text-sm text-text-secondary">
+            No fim do evento, registre quanto foi consumido, quanto foi descartado
+            (estava exposto) e quanto voltou (não exposto). O que volta volta para o estoque.
+          </p>
+        </div>
+
+        <div className="bg-bg-surface rounded-2xl p-6 border border-border-default">
+          <Package className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-4" />
+          <h2 className="font-semibold text-text-primary mb-2">Padrão por cliente</h2>
+          <p className="text-sm text-text-secondary">
+            Com o histórico de cada cliente ou buffet, o app aprende o padrão de consumo
+            e sugere quanto produzir no próximo evento — sem excesso, sem falta.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-bg-surface rounded-2xl p-8 border border-border-default text-center">
+        <h2 className="text-xl font-semibold text-text-primary mb-2">
+          A regra dos 70%
+        </h2>
+        <p className="text-text-secondary text-sm max-w-xl mx-auto">
+          Fazer 1 unidade por pessoa sempre sobra. Cada cliente tem um fator de produção
+          (ex.: 70% do total) que você ajusta conforme aprende o comportamento do público.
         </p>
       </div>
+
+      <p className="text-center text-xs text-text-muted mt-12">
+        <Link href="/termos" className="hover:underline">Termos de uso</Link>
+        {" · "}
+        <Link href="/privacidade" className="hover:underline">Privacidade</Link>
+      </p>
     </div>
   );
 }

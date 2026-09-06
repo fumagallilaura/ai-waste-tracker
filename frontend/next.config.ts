@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   },
 };
 
+// cacheia as chamadas à API em qualquer host (localhost em dev, domínio em prod)
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+
 const pwaConfig = withPWA({
   dest: "public",
   register: true,
@@ -17,15 +20,18 @@ const pwaConfig = withPWA({
   disable: process.env.NODE_ENV === "development",
   runtimeCaching: [
     {
-      urlPattern: /^https:\/\/api\.desperdiciozero\.com\.br\/api\//i,
+      // leituras da API: rede primeiro, cache como fallback offline
+      urlPattern: new RegExp(`^${apiUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.*`),
+      method: "GET",
       handler: "NetworkFirst",
       options: {
         cacheName: "api-cache",
         expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 60 * 60 * 24, // 24 hours
+          maxEntries: 100,
+          maxAgeSeconds: 60 * 60 * 24 * 7, // 7 dias
         },
-        networkTimeoutSeconds: 10,
+        networkTimeoutSeconds: 5,
+        cacheableResponse: { statuses: [0, 200] },
       },
     },
   ],

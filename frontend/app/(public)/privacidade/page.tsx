@@ -22,9 +22,14 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-semibold text-text-primary">2. Dados que coletamos</h2>
         <ul className="list-disc list-inside text-text-secondary space-y-2">
           <li><strong>Dados de cadastro:</strong> email e senha (hash argon2)</li>
-          <li><strong>Dados de uso:</strong> receitas, produções, listas de compras, registros de desperdício</li>
-          <li><strong>Dados de pagamento:</strong> processados pelo Mercado Pago (não armazenamos dados de cartão)</li>
+          <li><strong>Dados de uso:</strong> receitas, produções, requisições, estoque, clientes e balanços de eventos</li>
           <li><strong>Dados de navegação:</strong> cookies essenciais para funcionamento do PWA</li>
+          <li>
+            <strong>Modo visitante (sem conta):</strong> para permitir 1 produção de teste
+            sem cadastro, salvamos um identificador pseudônimo em cookie e o{" "}
+            <strong>hash do seu IP</strong> (nunca o IP em claro) para limitar abusos.
+            Ao criar conta, essas produções passam a ser suas.
+          </li>
         </ul>
       </section>
 
@@ -32,10 +37,10 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-semibold text-text-primary">3. Como usamos seus dados</h2>
         <ul className="list-disc list-inside text-text-secondary space-y-2">
           <li>Gerenciar sua conta e fornecer o serviço contratado</li>
-          <li>Calcular métricas de desperdício e economia</li>
-          <li>Enviar lembretes por email (com opção de cancelamento)</li>
-          <li>Gerar listas de compras automáticas</li>
-          <li>Melhorar o produto (dados anonimizados e agregados)</li>
+          <li>Calcular requisições de ingredientes e métricas de desperdício</li>
+          <li>Gerar listas de requisição automáticas com base no estoque</li>
+          <li>Aprender o padrão de consumo dos seus clientes a partir dos balanços</li>
+          <li>Limitar uso abusivo do modo visitante (identificador e hash de IP)</li>
         </ul>
       </section>
 
@@ -45,14 +50,8 @@ export default function PrivacyPage() {
           <strong>Não vendemos seus dados.</strong> Compartilhamos apenas com:
         </p>
         <ul className="list-disc list-inside text-text-secondary space-y-2">
-          <li><strong>Mercado Pago:</strong> processamento de pagamentos</li>
-          <li><strong>Resend:</strong> envio de emails transacionais</li>
           <li><strong>AWS:</strong> hospedagem e armazenamento (dados criptografados)</li>
         </ul>
-        <p className="text-text-secondary">
-          Dados para benchmark (comparação entre negócios) são sempre anonimizados e agregados.
-          Nenhum dado individual é exposto a outros usuários.
-        </p>
       </section>
 
       <section className="space-y-4">

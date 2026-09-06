@@ -6,13 +6,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
-    CheckoutRequest,
+    ClientCreate,
     LoginRequest,
     ProductionCreate,
     ProductionRecipeItem,
     RecipeCreate,
     RecipeIngredientCreate,
     RegisterRequest,
+    StockAdjustRequest,
     WasteRecordCreate,
 )
 
@@ -89,35 +90,53 @@ class TestProductionSchemas:
 
 
 class TestWasteSchemas:
-    def test_motivo_must_be_known(self):
-        with pytest.raises(ValidationError):
-            WasteRecordCreate(
-                ingrediente_ou_prato="arroz",
-                quantidade_sobrou=2,
-                unidade="kg",
-                motivo="fiz_vodu",
-            )
-
-    def test_valid_waste_record(self):
+    def test_valid_balance(self):
         w = WasteRecordCreate(
-            ingrediente_ou_prato="arroz",
-            quantidade_sobrou=2,
+            item="arroz",
+            quantidade_produzida=5,
+            quantidade_consumida=3,
+            quantidade_descartada=1.5,
+            quantidade_devolvida=0.5,
             unidade="kg",
-            motivo="produzi_demais",
             custo_desperdicio=12.5,
         )
         assert w.custo_desperdicio == 12.5
 
     def test_rejects_negative_quantity(self):
         with pytest.raises(ValidationError):
-            WasteRecordCreate(
-                ingrediente_ou_prato="arroz",
-                quantidade_sobrou=-1,
-                unidade="kg",
-                motivo="venceu",
-            )
+            WasteRecordCreate(item="arroz", quantidade_consumida=-1, unidade="kg")
+
+    def test_rejects_unknown_unit(self):
+        with pytest.raises(ValidationError):
+            WasteRecordCreate(item="arroz", quantidade_consumida=1, unidade="xícara")
 
 
-class TestPaymentSchemas:
-    def test_checkout_request_shape(self):
-        CheckoutRequest(plan="pro_mensal")
+class TestClientSchemas:
+    def test_default_fator_producao(self):
+        c = ClientCreate(nome="Buffet Sol")
+        assert c.fator_producao == 0.7
+        assert c.tipo == "cliente"
+
+    def test_rejects_invalid_tipo(self):
+        with pytest.raises(ValidationError):
+            ClientCreate(nome="X", tipo="fornecedor")
+
+    def test_rejects_fator_out_of_range(self):
+        with pytest.raises(ValidationError):
+            ClientCreate(nome="X", fator_producao=1.5)
+
+
+class TestStockSchemas:
+    def test_delta_can_be_negative(self):
+        s = StockAdjustRequest(ingrediente="arroz", unidade="kg", quantidade_delta=-2)
+        assert s.quantidade_delta == -2
+
+    def test_rejects_unknown_unit(self):
+        with pytest.raises(ValidationError):
+            StockAdjustRequest(ingrediente="arroz", unidade="saca", quantidade_delta=1)
+
+    def test_set_requires_non_negative(self):
+        from app.schemas import StockSetRequest
+
+        with pytest.raises(ValidationError):
+            StockSetRequest(unidade="kg", quantidade=-1)

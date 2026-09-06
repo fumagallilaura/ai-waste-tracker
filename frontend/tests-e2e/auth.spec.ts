@@ -52,3 +52,12 @@ test.describe("Autenticação", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 });
+
+test.describe("Autenticação › Google", () => {
+  test("botões de Google visíveis no login e cadastro", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByTestId("login-google")).toBeVisible();
+    await page.goto("/register");
+    await expect(page.getByTestId("register-google")).toBeVisible();
+  });
+});

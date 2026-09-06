@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { formatCurrency, getDisplayUnit } from "@/lib/units";
-import { ArrowLeft, ShoppingCart, AlertTriangle, CheckCircle, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ShoppingCart, AlertTriangle, CheckCircle, Plus, Trash2, RotateCcw } from "lucide-react";
 
 interface Production {
   id: string;
@@ -14,6 +14,7 @@ interface Production {
   tipo: string;
   data: string;
   convidados: number | null;
+  client_id: string | null;
   status: string;
   recipes: { id: string; recipe_id: string | null; escala_fator: number; item_nome: string | null }[];
   shopping_list: {
@@ -21,46 +22,69 @@ interface Production {
     ingrediente: string;
     quantidade_total: number;
     unidade_base: string;
+    quantidade_estoque: number;
+    quantidade_a_comprar: number;
+    preco_unitario: number;
     preco_estimado: number;
-    ja_tem_estoque: boolean;
   }[];
   waste_records: {
     id: string;
-    ingrediente_ou_prato: string;
-    quantidade_sobrou: number;
+    item: string;
+    quantidade_produzida: number;
+    quantidade_consumida: number;
+    quantidade_descartada: number;
+    quantidade_devolvida: number;
     unidade: string;
-    motivo: string;
     custo_desperdicio: number;
     created_at: string;
   }[];
 }
 
-const WASTE_MOTIVOS = [
-  { value: "produzi_demais", label: "Produzi demais" },
-  { value: "venceu", label: "Venceu" },
-  { value: "errei_receita", label: "Errei receita" },
-  { value: "cliente_nao_comeu", label: "Cliente não comeu" },
-  { value: "outro", label: "Outro" },
-];
-
 type Tab = "shopping" | "waste" | "details";
 
+const UNIDADES = ["g", "kg", "ml", "L", "unidade"];
+
+// useSearchParams exige boundary de Suspense no App Router
 export default function ProductionDetailPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    }>
+      <ProductionDetailContent />
+    </Suspense>
+  );
+}
+
+function ProductionDetailContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
 
+  const requestedTab = searchParams.get("tab");
   const [production, setProduction] = useState<Production | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("details");
+  const [activeTab, setActiveTab] = useState<Tab>(
+    requestedTab === "requisicao" || requestedTab === "balanco"
+      ? requestedTab === "requisicao"
+        ? "shopping"
+        : "waste"
+      : "details"
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editQty, setEditQty] = useState("");
+  const [recipeNames, setRecipeNames] = useState<Record<string, string>>({});
 
-  // Waste form
-  const [wasteForm, setWasteForm] = useState({
-    ingrediente_ou_prato: "",
-    quantidade_sobrou: "",
+  // Balanço pós-evento
+  const [balanceForm, setBalanceForm] = useState({
+    item: "",
+    quantidade_produzida: "",
+    quantidade_consumida: "",
+    quantidade_descartada: "",
+    quantidade_devolvida: "",
     unidade: "g",
-    motivo: "",
     custo_desperdicio: "",
   });
 
@@ -69,9 +93,37 @@ export default function ProductionDetailPage() {
     if (!token) return;
 
     apiGet<Production>(`/productions/${id}`, token)
-      .then(setProduction)
+      .then(async (prod) => {
+        setProduction(prod);
+        // requisição pedida pela URL: gera a lista automaticamente
+        if (requestedTab === "requisicao" && prod.shopping_list.length === 0) {
+          try {
+            const items = await apiGet<Production["shopping_list"]>(
+              `/productions/${id}/shopping-list`,
+              token
+            );
+            setProduction({ ...prod, shopping_list: items });
+          } catch {
+            /* a aba mostra o estado vazio e permite gerar */
+          }
+        }
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // nomes das receitas para exibir nas linhas da produção
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    apiGet<{ id: string; nome: string }[]>("/recipes", token)
+      .then((recipes) => {
+        const map: Record<string, string> = {};
+        for (const r of recipes) map[r.id] = r.nome;
+        setRecipeNames(map);
+      })
+      .catch(() => {});
   }, [id]);
 
   const handleTabChange = (key: Tab) => {
@@ -87,17 +139,15 @@ export default function ProductionDetailPage() {
     }
   };
 
-  const handleToggleEstoque = async (itemId: string) => {
+  const handleSaveRequisicao = async (itemId: string) => {
     const token = getAccessToken();
-    if (!token || !production) return;
-
-    const item = production.shopping_list.find((i) => i.id === itemId);
-    if (!item) return;
-
+    if (!token) return;
+    const qtd = parseFloat(editQty);
+    if (Number.isNaN(qtd) || qtd < 0) return;
     try {
       const updated = await apiPut<Production["shopping_list"][number]>(
         `/productions/${id}/shopping-list/${itemId}`,
-        { ja_tem_estoque: !item.ja_tem_estoque },
+        { quantidade_a_comprar: qtd },
         token
       );
       setProduction((prev) => {
@@ -107,30 +157,48 @@ export default function ProductionDetailPage() {
           shopping_list: prev.shopping_list.map((i) => (i.id === itemId ? updated : i)),
         };
       });
-    } catch (err) {
-      alert("Erro ao atualizar item");
+      setEditingItemId(null);
+      setEditQty("");
+    } catch {
+      alert("Erro ao atualizar requisição");
     }
   };
 
-  const handleAddWaste = async (e: React.FormEvent) => {
+  const handleRegenerate = async () => {
+    const token = getAccessToken();
+    if (!token || !production) return;
+    try {
+      const items = await apiGet<Production["shopping_list"]>(
+        `/productions/${id}/shopping-list?regenerate=true`,
+        token
+      );
+      setProduction({ ...production, shopping_list: items });
+    } catch {
+      alert("Erro ao recalcular a lista");
+    }
+  };
+
+  const handleAddBalance = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = getAccessToken();
     if (!token || !production) return;
 
-    if (!wasteForm.ingrediente_ou_prato || !wasteForm.quantidade_sobrou || !wasteForm.motivo) {
-      alert("Preencha todos os campos obrigatórios");
+    if (!balanceForm.item.trim()) {
+      alert("Informe o item");
       return;
     }
 
     try {
-      const newWaste = await apiPost<Production["waste_records"][number]>(
+      const newBalance = await apiPost<Production["waste_records"][number]>(
         `/productions/${id}/waste`,
         {
-          ingrediente_ou_prato: wasteForm.ingrediente_ou_prato,
-          quantidade_sobrou: parseFloat(wasteForm.quantidade_sobrou),
-          unidade: wasteForm.unidade,
-          motivo: wasteForm.motivo,
-          custo_desperdicio: parseFloat(wasteForm.custo_desperdicio) || 0,
+          item: balanceForm.item.trim(),
+          quantidade_produzida: parseFloat(balanceForm.quantidade_produzida) || 0,
+          quantidade_consumida: parseFloat(balanceForm.quantidade_consumida) || 0,
+          quantidade_descartada: parseFloat(balanceForm.quantidade_descartada) || 0,
+          quantidade_devolvida: parseFloat(balanceForm.quantidade_devolvida) || 0,
+          unidade: balanceForm.unidade,
+          custo_desperdicio: parseFloat(balanceForm.custo_desperdicio) || 0,
         },
         token
       );
@@ -139,24 +207,26 @@ export default function ProductionDetailPage() {
         if (!prev) return prev;
         return {
           ...prev,
-          waste_records: [...prev.waste_records, newWaste],
+          waste_records: [...prev.waste_records, newBalance],
           status: "finalizado",
         };
       });
 
-      setWasteForm({
-        ingrediente_ou_prato: "",
-        quantidade_sobrou: "",
-        unidade: "g",
-        motivo: "",
+      setBalanceForm({
+        item: "",
+        quantidade_produzida: "",
+        quantidade_consumida: "",
+        quantidade_descartada: "",
+        quantidade_devolvida: "",
+        unidade: balanceForm.unidade,
         custo_desperdicio: "",
       });
     } catch (err) {
-      alert("Erro ao registrar desperdício");
+      alert(err instanceof Error ? err.message : "Erro ao registrar balanço");
     }
   };
 
-  const handleDeleteWaste = async (recordId: string) => {
+  const handleDeleteBalance = async (recordId: string) => {
     const token = getAccessToken();
     if (!token) return;
 
@@ -186,7 +256,7 @@ export default function ProductionDetailPage() {
   if (!production) {
     return (
       <div className="text-center py-12">
-        <p className="text-text-muted">Produção não encontrada</p>
+        <p className="text-text-muted">{error || "Produção não encontrada"}</p>
         <Link href="/productions" className="text-primary-600 hover:underline mt-2 inline-block">
           ← Voltar para produções
         </Link>
@@ -194,14 +264,27 @@ export default function ProductionDetailPage() {
     );
   }
 
+  const totalRequisicao = production.shopping_list.reduce(
+    (sum, i) => sum + i.preco_estimado,
+    0
+  );
   const totalDesperdicio = production.waste_records.reduce(
     (sum, r) => sum + r.custo_desperdicio,
     0
   );
-  const totalCompras = production.shopping_list.reduce(
-    (sum, i) => sum + (i.ja_tem_estoque ? 0 : i.preco_estimado),
+  const totalConsumido = production.waste_records.reduce(
+    (sum, r) => sum + r.quantidade_consumida,
     0
   );
+  const totalDevolvido = production.waste_records.reduce(
+    (sum, r) => sum + r.quantidade_devolvida,
+    0
+  );
+
+  const fmtBase = (qtd: number, unit: string) => {
+    const [v, u] = getDisplayUnit(qtd, unit);
+    return `${v.toLocaleString("pt-BR")} ${u}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -237,21 +320,22 @@ export default function ProductionDetailPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-bg-surface rounded-xl border border-border-default p-4">
-          <p className="text-sm text-text-muted">Total compras</p>
+          <p className="text-sm text-text-muted">Requisição</p>
           <p className="text-xl font-bold text-text-primary mt-1">
-            {formatCurrency(totalCompras)}
+            {formatCurrency(totalRequisicao)}
           </p>
         </div>
         <div className="bg-bg-surface rounded-xl border border-border-default p-4">
-          <p className="text-sm text-text-muted">Desperdício</p>
+          <p className="text-sm text-text-muted">Descartado (R$)</p>
           <p className="text-xl font-bold text-danger-600 dark:text-danger-400 mt-1">
             {formatCurrency(totalDesperdicio)}
           </p>
         </div>
         <div className="bg-bg-surface rounded-xl border border-border-default p-4">
-          <p className="text-sm text-text-muted">Registros</p>
+          <p className="text-sm text-text-muted">Consumido / devolvido</p>
           <p className="text-xl font-bold text-text-primary mt-1">
-            {production.waste_records.length}
+            {totalConsumido.toLocaleString("pt-BR")}
+            <span className="text-text-muted text-sm"> / {totalDevolvido.toLocaleString("pt-BR")}</span>
           </p>
         </div>
       </div>
@@ -260,8 +344,8 @@ export default function ProductionDetailPage() {
       <div className="flex gap-1 bg-bg-surface-alt rounded-lg p-1">
         {[
           { key: "details" as Tab, label: "Detalhes", icon: CheckCircle },
-          { key: "shopping" as Tab, label: "Lista de Compras", icon: ShoppingCart },
-          { key: "waste" as Tab, label: "Desperdício", icon: AlertTriangle },
+          { key: "shopping" as Tab, label: "Requisição", icon: ShoppingCart },
+          { key: "waste" as Tab, label: "Balanço do evento", icon: AlertTriangle },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -292,10 +376,16 @@ export default function ProductionDetailPage() {
                   className="flex items-center justify-between py-2 border-b border-border-default last:border-0"
                 >
                   <span className="text-text-primary">
-                    {r.item_nome || `Receita ${r.recipe_id?.slice(0, 8)}...`}
+                    {r.item_nome ||
+                      (r.recipe_id && recipeNames[r.recipe_id]) ||
+                      "Receita"}
                   </span>
                   <span className="text-sm text-text-muted">
-                    Escala: {r.escala_fator.toFixed(1)}x
+                    {r.item_nome
+                      ? "quantidade total do evento"
+                      : `${r.escala_fator.toLocaleString("pt-BR", {
+                          maximumFractionDigits: 2,
+                        })} receita${r.escala_fator === 1 ? "" : "s"}`}
                   </span>
                 </div>
               ))}
@@ -306,7 +396,17 @@ export default function ProductionDetailPage() {
 
       {activeTab === "shopping" && (
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">Lista de Compras</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-primary">Requisição de ingredientes</h2>
+            <button
+              onClick={handleRegenerate}
+              className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700"
+              title="Recalcula quantidades com o estoque atual"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Recalcular com estoque atual
+            </button>
+          </div>
           {production.shopping_list.length === 0 ? (
             <p className="text-text-muted text-sm">
               Nenhuma lista gerada. Adicione receitas ou itens à produção.
@@ -318,36 +418,77 @@ export default function ProductionDetailPage() {
                   item.quantidade_total,
                   item.unidade_base
                 );
+                const [estoqueQtd, estoqueUnit] = getDisplayUnit(
+                  item.quantidade_estoque,
+                  item.unidade_base
+                );
+                const [comprarQtd, comprarUnit] = getDisplayUnit(
+                  item.quantidade_a_comprar,
+                  item.unidade_base
+                );
+                const unitSuffix = (u: string) =>
+                  u === "g" ? "kg" : u === "ml" ? "L" : u;
+                const editUnit = unitSuffix(item.unidade_base);
                 return (
                   <div
                     key={item.id}
-                    className={`flex items-center justify-between py-3 px-4 rounded-lg border transition-colors ${
-                      item.ja_tem_estoque
-                        ? "bg-bg-surface-alt border-border-default opacity-60"
-                        : "border-border-default"
-                    }`}
+                    className="flex items-center justify-between py-3 px-4 rounded-lg border border-border-default"
                   >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.ja_tem_estoque}
-                        onChange={() => handleToggleEstoque(item.id)}
-                        className="w-4 h-4 text-primary-600 rounded border-border-default focus:ring-primary-500"
-                      />
-                      <div>
-                        <p
-                          className={`text-sm font-medium ${
-                            item.ja_tem_estoque
-                              ? "text-text-muted line-through"
-                              : "text-text-primary"
-                          }`}
-                        >
-                          {item.ingrediente}
-                        </p>
-                        <p className="text-xs text-text-muted">
-                          {displayQtd} {displayUnit} · {formatCurrency(item.preco_estimado)}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">{item.ingrediente}</p>
+                      <p className="text-xs text-text-muted">
+                        Necessário: {displayQtd.toLocaleString("pt-BR")} {displayUnit}
+                        {" · "}Em estoque: {estoqueQtd.toLocaleString("pt-BR")} {estoqueUnit}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {editingItemId === item.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            autoFocus
+                            value={editQty}
+                            onChange={(e) => setEditQty(e.target.value)}
+                            placeholder={`Qtd (${editUnit})`}
+                            className="w-28 px-2 py-1 border border-border-default rounded bg-bg-surface text-text-primary text-sm"
+                          />
+                          <button
+                            onClick={() => handleSaveRequisicao(item.id)}
+                            className="text-sm px-3 py-1 bg-primary-600 text-text-inverse rounded"
+                          >
+                            OK
+                          </button>
+                          <button
+                            onClick={() => { setEditingItemId(null); setEditQty(""); }}
+                            className="text-sm px-2 py-1 text-text-muted"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingItemId(item.id);
+                              // converte base para unidade de edição (kg/L)
+                              const qtd =
+                                item.unidade_base === "g" || item.unidade_base === "ml"
+                                  ? item.quantidade_a_comprar / 1000
+                                  : item.quantidade_a_comprar;
+                              setEditQty(String(qtd));
+                            }}
+                            className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"
+                            title="Clique para ajustar manualmente"
+                          >
+                            Pedir: {comprarQtd.toLocaleString("pt-BR")} {comprarUnit}
+                          </button>
+                          <p className="text-xs text-text-muted">
+                            {formatCurrency(item.preco_estimado)}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -359,122 +500,145 @@ export default function ProductionDetailPage() {
 
       {activeTab === "waste" && (
         <div className="space-y-6">
-          {/* Waste form */}
+          {/* Balanço form */}
           <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-text-primary">Registrar Desperdício</h2>
-            <form onSubmit={handleAddWaste} className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-text-primary">Balanço do evento</h2>
+              <p className="text-sm text-text-muted mt-1">
+                Para cada item: quanto foi consumido, quanto foi descartado (estava exposto) e
+                quanto voltou (não estava exposto). O que volta é creditado no estoque.
+              </p>
+            </div>
+            <form onSubmit={handleAddBalance} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Ingrediente ou prato *
+                    Item *
                   </label>
                   <input
                     type="text"
-                    value={wasteForm.ingrediente_ou_prato}
+                    value={balanceForm.item}
                     onChange={(e) =>
-                      setWasteForm((prev) => ({
-                        ...prev,
-                        ingrediente_ou_prato: e.target.value,
-                      }))
+                      setBalanceForm((prev) => ({ ...prev, item: e.target.value }))
                     }
-                    placeholder="Ex: tomate, panacota..."
+                    placeholder="Ex: brigadeiro, panacota..."
                     className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">
-                      Quantidade *
-                    </label>
-                    <input
-                      type="number"
-                      value={wasteForm.quantidade_sobrou}
-                      onChange={(e) =>
-                        setWasteForm((prev) => ({
-                          ...prev,
-                          quantidade_sobrou: e.target.value,
-                        }))
-                      }
-                      placeholder="Ex: 500"
-                      step="0.1"
-                      min="0"
-                      className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">
-                      Unidade
-                    </label>
-                    <select
-                      value={wasteForm.unidade}
-                      onChange={(e) =>
-                        setWasteForm((prev) => ({ ...prev, unidade: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="g">g</option>
-                      <option value="kg">kg</option>
-                      <option value="ml">ml</option>
-                      <option value="L">L</option>
-                      <option value="unidade">unidade</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">
-                      Custo (R$)
-                    </label>
-                    <input
-                      type="number"
-                      value={wasteForm.custo_desperdicio}
-                      onChange={(e) =>
-                        setWasteForm((prev) => ({
-                          ...prev,
-                          custo_desperdicio: e.target.value,
-                        }))
-                      }
-                      placeholder="0"
-                      step="0.01"
-                      min="0"
-                      className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Unidade
+                  </label>
+                  <select
+                    value={balanceForm.unidade}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, unidade: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    {UNIDADES.map((u) => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Produzido
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={balanceForm.quantidade_produzida}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, quantidade_produzida: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Consumido
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={balanceForm.quantidade_consumida}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, quantidade_consumida: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Descartado (exposto)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={balanceForm.quantidade_descartada}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, quantidade_descartada: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-danger-500 focus:border-danger-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Voltou (não exposto)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={balanceForm.quantidade_devolvida}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, quantidade_devolvida: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="max-w-xs">
                 <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Motivo *
+                  Custo do descartado (R$)
                 </label>
-                <select
-                  value={wasteForm.motivo}
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={balanceForm.custo_desperdicio}
                   onChange={(e) =>
-                    setWasteForm((prev) => ({ ...prev, motivo: e.target.value }))
+                    setBalanceForm((prev) => ({ ...prev, custo_desperdicio: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Selecione...</option>
-                  {WASTE_MOTIVOS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="0"
+                  className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
               </div>
 
               <button
                 type="submit"
-                className="flex items-center gap-2 bg-danger-600 text-text-inverse px-4 py-2 rounded-lg hover:bg-danger-700 transition-colors text-sm"
+                className="flex items-center gap-2 bg-primary-600 text-text-inverse px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
-                Registrar desperdício
+                Registrar balanço
               </button>
             </form>
           </div>
 
-          {/* Waste records */}
+          {/* Balanço records */}
           {production.waste_records.length > 0 && (
             <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-3">
               <h2 className="text-lg font-semibold text-text-primary">Registros</h2>
@@ -484,12 +648,15 @@ export default function ProductionDetailPage() {
                   className="flex items-center justify-between py-3 px-4 bg-bg-surface-alt rounded-lg"
                 >
                   <div>
-                    <p className="text-sm font-medium text-text-primary">
-                      {record.ingrediente_ou_prato}
-                    </p>
+                    <p className="text-sm font-medium text-text-primary">{record.item}</p>
                     <p className="text-xs text-text-muted">
-                      {record.quantidade_sobrou} {record.unidade} ·{" "}
-                      {WASTE_MOTIVOS.find((m) => m.value === record.motivo)?.label || record.motivo}
+                      Produzido: {record.quantidade_produzida.toLocaleString("pt-BR")} {record.unidade}
+                      {" · "}Consumido: {record.quantidade_consumida.toLocaleString("pt-BR")}
+                      {" · "}Descartado:{" "}
+                      <span className="text-danger-600 dark:text-danger-400">
+                        {record.quantidade_descartada.toLocaleString("pt-BR")}
+                      </span>
+                      {" · "}Voltou: {record.quantidade_devolvida.toLocaleString("pt-BR")}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -497,7 +664,7 @@ export default function ProductionDetailPage() {
                       {formatCurrency(record.custo_desperdicio)}
                     </span>
                     <button
-                      onClick={() => handleDeleteWaste(record.id)}
+                      onClick={() => handleDeleteBalance(record.id)}
                       className="p-1 rounded hover:bg-danger-50 dark:hover:bg-danger-900/20 text-text-muted hover:text-danger-600 dark:hover:text-danger-400 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />

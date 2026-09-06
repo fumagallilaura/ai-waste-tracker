@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models import Production, ProductionRecipe, User
+from app.models import Client, Production, ProductionRecipe, User
 from app.schemas import (
     ProductionCreate,
     ProductionDetailResponse,
@@ -19,6 +19,19 @@ from app.schemas import (
 )
 
 router = APIRouter()
+
+
+async def _validate_client(
+    db: AsyncSession, client_id: uuid.UUID | None, user: User
+) -> uuid.UUID | None:
+    if client_id is None:
+        return None
+    result = await db.execute(
+        select(Client).where(Client.id == client_id, Client.user_id == user.id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client_id
 
 
 @router.get("/", response_model=list[ProductionResponse])
@@ -42,8 +55,10 @@ async def create_production(
     user: User = Depends(get_current_user),
 ):
     """Create a new production (event or daily shift)."""
+    client_id = await _validate_client(db, data.client_id, user)
     production = Production(
         user_id=user.id,
+        client_id=client_id,
         nome=data.nome,
         tipo=data.tipo,
         data=datetime.combine(data.data, datetime.min.time()),
@@ -96,6 +111,7 @@ async def get_production(
         tipo=production.tipo,
         data=production.data.date(),
         convidados=production.convidados,
+        client_id=production.client_id,
         status=production.status,
         created_at=production.created_at,
         updated_at=production.updated_at,
@@ -114,18 +130,22 @@ async def get_production(
                 "ingrediente": sl.ingrediente,
                 "quantidade_total": sl.quantidade_total,
                 "unidade_base": sl.unidade_base,
+                "quantidade_estoque": sl.quantidade_estoque,
+                "quantidade_a_comprar": sl.quantidade_a_comprar,
+                "preco_unitario": sl.preco_unitario,
                 "preco_estimado": sl.preco_estimado,
-                "ja_tem_estoque": sl.ja_tem_estoque,
             }
             for sl in production.shopping_list
         ],
         waste_records=[
             {
                 "id": wr.id,
-                "ingrediente_ou_prato": wr.ingrediente_ou_prato,
-                "quantidade_sobrou": wr.quantidade_sobrou,
+                "item": wr.item,
+                "quantidade_produzida": wr.quantidade_produzida,
+                "quantidade_consumida": wr.quantidade_consumida,
+                "quantidade_descartada": wr.quantidade_descartada,
+                "quantidade_devolvida": wr.quantidade_devolvida,
                 "unidade": wr.unidade,
-                "motivo": wr.motivo,
                 "custo_desperdicio": wr.custo_desperdicio,
                 "created_at": wr.created_at,
             }
@@ -159,6 +179,8 @@ async def update_production(
         production.data = datetime.combine(data.data, datetime.min.time())
     if data.convidados is not None:
         production.convidados = data.convidados
+    if data.client_id is not None:
+        production.client_id = await _validate_client(db, data.client_id, user)
     if data.status is not None:
         production.status = data.status
 
@@ -213,6 +235,7 @@ async def duplicate_production(
         tipo=original.tipo,
         data=original.data,
         convidados=original.convidados,
+        client_id=original.client_id,
         status="planejado",
     )
     db.add(production)

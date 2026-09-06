@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.db.types import UtcDateTime
@@ -36,6 +36,12 @@ class User(Base):
     )
     productions: Mapped[list[Production]] = relationship(
         "Production", back_populates="user", cascade="all, delete-orphan"
+    )
+    clients: Mapped[list[Client]] = relationship(
+        "Client", back_populates="user", cascade="all, delete-orphan"
+    )
+    stock_items: Mapped[list[IngredientStock]] = relationship(
+        "IngredientStock", back_populates="user", cascade="all, delete-orphan"
     )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
@@ -114,8 +120,16 @@ class Production(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    # NULL = produção criada por visitante (trial sem login)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    guest_identifier_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True, index=True
     )
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
     tipo: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -130,7 +144,8 @@ class Production(Base):
     )
 
     # Relationships
-    user: Mapped[User] = relationship("User", back_populates="productions")
+    user: Mapped[User | None] = relationship("User", back_populates="productions")
+    client: Mapped[Client | None] = relationship("Client", back_populates="productions")
     production_recipes: Mapped[list[ProductionRecipe]] = relationship(
         "ProductionRecipe", back_populates="production", cascade="all, delete-orphan"
     )
@@ -176,14 +191,25 @@ class ShoppingListItem(Base):
     ingrediente: Mapped[str] = mapped_column(String(255), nullable=False)
     quantidade_total: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     unidade_base: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Snapshot do estoque no momento da geração; o que falta é a requisição.
+    quantidade_estoque: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    quantidade_a_comprar: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    preco_unitario: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     preco_estimado: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    ja_tem_estoque: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships
     production: Mapped[Production] = relationship("Production", back_populates="shopping_list")
 
 
 class WasteRecord(Base):
+    """Balanço pós-evento de um item produzido.
+
+    Três destinos para o que foi produzido, conforme o fluxo do cliente:
+    - consumido: foi servido e comido
+    - descartado: sobrou exposto no evento e foi jogado fora
+    - devolvido: voltou sem ter sido exposto e retorna ao estoque
+    """
+
     __tablename__ = "waste_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -192,10 +218,12 @@ class WasteRecord(Base):
     production_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(), ForeignKey("productions.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    ingrediente_ou_prato: Mapped[str] = mapped_column(String(255), nullable=False)
-    quantidade_sobrou: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    item: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantidade_produzida: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    quantidade_consumida: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    quantidade_descartada: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    quantidade_devolvida: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
     unidade: Mapped[str] = mapped_column(String(20), nullable=False)
-    motivo: Mapped[str] = mapped_column(String(50), nullable=False)
     custo_desperdicio: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         UtcDateTime, nullable=False, server_default=func.now()
@@ -203,3 +231,61 @@ class WasteRecord(Base):
 
     # Relationships
     production: Mapped[Production] = relationship("Production", back_populates="waste_records")
+
+
+class Client(Base):
+    """Cliente ou buffet — alvo do mapeamento de padrão de consumo."""
+
+    __tablename__ = "clients"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nome: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "buffet" (agencia/consumo proprio) ou "cliente" (evento pontual)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="cliente")
+    # Fração do total a produzir por opção (regra dos 70% do cliente)
+    fator_producao: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=0.7)
+    observacoes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    user: Mapped[User] = relationship("User", back_populates="clients")
+    productions: Mapped[list[Production]] = relationship(
+        "Production", back_populates="client"
+    )
+
+
+class IngredientStock(Base):
+    """Estoque atual de um ingrediente do usuário (em unidade base: g/ml/unidade)."""
+
+    __tablename__ = "ingredient_stock"
+    __table_args__ = (UniqueConstraint("user_id", "ingrediente", name="uq_stock_user_ingrediente"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ingrediente: Mapped[str] = mapped_column(String(255), nullable=False)
+    unidade_base: Mapped[str] = mapped_column(String(10), nullable=False)
+    quantidade: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False, default=0)
+    preco_unitario: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    user: Mapped[User] = relationship("User", back_populates="stock_items")

@@ -123,8 +123,14 @@ export default function RecipesPage() {
       ) : (
         <div className="grid gap-4">
           {recipes.map((recipe) => {
+            // preco_unitario é preço por kg/L/unidade da unidade original do ingrediente
             const custoTotal = recipe.ingredients.reduce(
-              (sum, ing) => sum + ing.preco_unitario * ing.quantidade,
+              (sum, ing) =>
+                sum +
+                ing.preco_unitario *
+                  (ing.unidade === "g" || ing.unidade === "ml"
+                    ? ing.quantidade / 1000
+                    : ing.quantidade),
               0
             );
 

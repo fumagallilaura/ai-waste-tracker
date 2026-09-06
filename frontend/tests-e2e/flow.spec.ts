@@ -6,7 +6,7 @@ let EMAIL = "";
 let RECIPE = "";
 let PRODUCTION = "";
 
-test.describe("Fluxo completo: receita → produção → compras → desperdício", () => {
+test.describe("Fluxo completo: receita → produção → requisição → balanço", () => {
   test.setTimeout(60_000);
 
   test.beforeEach(async ({ page }) => {
@@ -28,11 +28,11 @@ test.describe("Fluxo completo: receita → produção → compras → desperdíc
     await page.getByPlaceholder("Ex: Panacota, Feijoada, Macarrão...").fill(RECIPE);
     await page.getByPlaceholder("Ex: 10").fill("10");
 
-    // umidade default é "g"; 500g de farinha a R$ 0,02/g
+    // 500g de farinha a R$ 10,00/kg
     const row = page.locator("div.col-span-4");
     await row.getByPlaceholder("Ex: farinha de trigo").fill("farinha");
     await page.getByPlaceholder("Ex: 500").fill("500");
-    await page.getByPlaceholder("Ex: 5.99").fill("0.02");
+    await page.getByPlaceholder("Ex: 5.99").fill("10");
 
     await page.getByRole("button", { name: "Salvar receita" }).click();
     await expect(page).toHaveURL(/\/recipes$/);
@@ -43,64 +43,90 @@ test.describe("Fluxo completo: receita → produção → compras → desperdíc
     await createRecipe(page);
   });
 
-  test("produção com receita gera lista de compras escalada (R2/D009)", async ({ page }) => {
+  test("produção com escala direta gera requisição (10x receita)", async ({ page }) => {
     await createRecipe(page);
 
     await page.goto("/productions/new");
     await page.getByPlaceholder("Ex: Casamento Ana e Pedro, Almoço de terça...").fill(PRODUCTION);
     await page.locator("select").first().selectOption("casamento");
     await page.locator('input[type="date"]').fill("2026-10-10");
-    await page.getByPlaceholder("Ex: 100").fill("30");
 
-    // Fluxo A: selecionar a receita (modo "Usar receitas cadastradas" é default)
+    // Fluxo A: selecionar a receita e informar quantas vezes fazer (escala direta)
+    await expect(page.getByText(RECIPE)).toBeVisible({ timeout: 10_000 });
     await page.locator("input[type=checkbox]").first().check();
+    await expect(page.locator('input[step="any"]')).toBeVisible();
+    await page.locator('input[step="any"]').fill("10");
 
     await page.getByRole("button", { name: "Criar produção" }).click();
-    await expect(page).toHaveURL(/\/productions$/);
-    await expect(page.getByText(PRODUCTION)).toBeVisible();
 
-    // Abrir a produção e conferir a lista
-    await page.getByText(PRODUCTION).first().click();
-    await page.getByRole("button", { name: "Lista de Compras" }).click();
+    // cai direto na requisição pronta
+    await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, {
+      timeout: 15_000,
+    });
 
-    // 30 convidados / rendimento 10 = escala 3x → 1500g = 1,5kg
+    // 10 × 500g = 5kg
     await expect(page.getByText("farinha")).toBeVisible();
-    await expect(page.getByText(/1\.5 kg/)).toBeVisible();
+    await expect(page.getByText(/Necessário: 5 kg/)).toBeVisible();
+    await expect(page.getByText(/Pedir: 5 kg/)).toBeVisible();
   });
 
-  test("registrar desperdício atualiza dashboard", async ({ page }) => {
+  test("balanço do evento (consumido/descartado/devolvido) atualiza dashboard", async ({ page }) => {
     await createRecipe(page);
 
     await page.goto("/productions/new");
     await page.getByPlaceholder("Ex: Casamento Ana e Pedro, Almoço de terça...").fill(PRODUCTION);
     await page.locator('input[type="date"]').fill("2026-10-10");
-    await page.getByPlaceholder("Ex: 100").fill("20");
 
-    // Fluxo B: itens manuais (D002)
-    await page.getByRole("button", { name: /Informar manualmente/ }).click();
-    await page.getByPlaceholder("Ex: panacota, arroz, frango...").fill("panacota");
-    await page.getByPlaceholder("Ex: 50").fill("50");
+    // Fluxo B: itens manuais com quantidade total
+    await page.getByRole("button", { name: /Informar itens diretamente/ }).click();
+    await page.getByPlaceholder("Ex: brigadeiro, panacota...").first().fill("panacota");
+    await page.getByPlaceholder("Ex: 70").fill("50");
     await page.getByRole("button", { name: "Criar produção" }).click();
 
-    await expect(page.getByText(PRODUCTION)).toBeVisible();
-    await page.getByText(PRODUCTION).first().click();
+    // cai direto na requisição; troca para o balanço
+    await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, {
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Balanço do evento" }).click();
 
-    // Aba desperdício
-    await page.getByRole("button", { name: "Desperdício" }).click();
-    await page.getByPlaceholder("Ex: tomate, panacota...").fill("panacota");
-    await page.getByPlaceholder("Ex: 500").fill("10");
-    await page.getByPlaceholder("0", { exact: true }).fill("25");
-    await page.locator("select").last().selectOption("produzi_demais");
-    await page.getByRole("button", { name: "Registrar desperdício" }).click();
+    await page.getByPlaceholder("Ex: brigadeiro, panacota...").fill("panacota");
+
+    const numbers = page.locator('form input[type="number"]');
+    await numbers.nth(0).fill("10"); // produzido
+    await numbers.nth(1).fill("3"); // consumido
+    await numbers.nth(2).fill("2"); // descartado (exposto)
+    await numbers.nth(3).fill("5"); // devolvido (não exposto)
+    await numbers.nth(4).fill("25"); // custo do descartado
+
+    await page.getByRole("button", { name: "Registrar balanço" }).click();
 
     await expect(page.getByText("R$ 25,00").first()).toBeVisible();
-
-    // Status mudou para finalizado
     await expect(page.getByText("Finalizado")).toBeVisible();
 
-    // Dashboard reflete o desperdício
+    // Dashboard reflete o descarte
     await page.getByRole("link", { name: "Dashboard" }).click();
     await expect(page.getByTestId("metric-desperdicio")).toHaveText("R$ 25,00");
-    await expect(page.getByTestId("metric-eventos")).toHaveText("1");
+    await expect(page.getByTestId("metric-compras")).toBeVisible();
+    await expect(page.getByText("1 evento(s) finalizado(s)")).toBeVisible();
+  });
+
+  test("estoque: entrada aparece e é listada", async ({ page }) => {
+    await page.goto("/estoque");
+    await page.getByPlaceholder("Ex: farinha de trigo").fill("farinha");
+    await page.getByPlaceholder("Ex: 5").fill("2");
+    await page.getByRole("button", { name: "Registrar movimentação" }).click();
+
+    await expect(page.getByText("farinha")).toBeVisible();
+    await expect(page.getByText("2 kg")).toBeVisible();
+  });
+
+  test("cliente: cria buffet com fator de produção", async ({ page }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Novo cliente" }).click();
+    await page.getByPlaceholder("Ex: Buffet Aurora, Casamento Silva...").fill(`Buffet E2E ${unique}`);
+    await page.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(page.getByText(`Buffet E2E ${unique}`)).toBeVisible();
+    await expect(page.getByText("Fator de produção: 70%")).toBeVisible();
   });
 });

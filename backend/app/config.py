@@ -19,16 +19,18 @@ class Settings(BaseSettings):
     jwt_private_key_path: str = "/etc/desperdicio-zero/jwt/private_key.pem"
     jwt_public_key_path: str = "/etc/desperdicio-zero/jwt/public_key.pem"
 
-    # Mercado Pago
-    mercado_pago_access_token: str = ""
-    mercado_pago_sandbox: bool = True
-
-    # Email (Resend)
-    resend_api_key: str = ""
-    email_from: str = "noreply@desperdiciozero.com.br"
+    # Google OAuth (login social). Vazio = botão desabilitado.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    frontend_url: str = "http://localhost:3000"
 
     # Rate Limiting
     rate_limit_login_per_minute: int = 5
+    rate_limit_guest_per_minute: int = 60
+
+    # Cookies (Secure só em produção HTTPS)
+    cookie_secure: bool = False
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "https://desperdiciozero.com.br"]

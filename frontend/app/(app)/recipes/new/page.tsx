@@ -252,7 +252,7 @@ export default function NewRecipePage() {
               </div>
 
               <div className="col-span-3">
-                <label className="block text-xs text-text-muted mb-1">Preço unitário (R$)</label>
+                <label className="block text-xs text-text-muted mb-1">Preço por kg/L/un (R$)</label>
                 <input
                   type="number"
                   value={ing.preco_unitario}

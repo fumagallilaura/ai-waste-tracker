@@ -35,6 +35,17 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Baseline security headers for every response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -47,13 +58,15 @@ app.add_middleware(
 # Import and include routers
 from app.routers import (  # noqa: E402
     auth,
+    clients,
     dashboard,
+    guest,
     health,
     lgpd,
-    payments,
     productions,
     recipes,
     shopping,
+    stock,
     waste,
 )
 
@@ -61,10 +74,12 @@ PREFIX = settings.api_prefix
 
 app.include_router(auth.router, prefix=f"{PREFIX}/auth", tags=["auth"])
 app.include_router(recipes.router, prefix=f"{PREFIX}/recipes", tags=["recipes"])
+app.include_router(clients.router, prefix=f"{PREFIX}/clients", tags=["clients"])
+app.include_router(stock.router, prefix=f"{PREFIX}/stock", tags=["stock"])
+app.include_router(guest.router, prefix=f"{PREFIX}/guest", tags=["guest"])
 app.include_router(productions.router, prefix=f"{PREFIX}/productions", tags=["productions"])
 app.include_router(shopping.router, prefix=f"{PREFIX}/productions", tags=["productions"])
 app.include_router(waste.router, prefix=f"{PREFIX}/productions", tags=["productions"])
 app.include_router(dashboard.router, prefix=f"{PREFIX}/dashboard", tags=["dashboard"])
-app.include_router(payments.router, prefix=f"{PREFIX}/payments", tags=["payments"])
 app.include_router(lgpd.router, prefix=f"{PREFIX}/lgpd", tags=["lgpd"])
 app.include_router(health.router, prefix=f"{settings.api_prefix}", tags=["health"])
