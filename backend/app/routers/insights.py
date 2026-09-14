@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Production, User, WasteRecord
+from app.services.analytics import balance_percentages
 
 router = APIRouter()
 
@@ -65,24 +66,6 @@ async def _finalized_with_balance(
     return result
 
 
-def _balance_sums(records: list[WasteRecord]) -> tuple[float, float, float, float]:
-    """Totais em unidade-base por produção (consumido, descartado, devolvido, produzido)."""
-    from app.core.units import UNIT_CONVERSIONS
-
-    base = {"consumida": 0.0, "descartada": 0.0, "devolvida": 0.0, "produzida": 0.0}
-    for record in records:
-        factor = float(UNIT_CONVERSIONS[record.unidade]["factor"])
-        for key in base:
-            value = getattr(record, f"quantidade_{key}")
-            base[key] += float(value) * factor
-    return (
-        base["consumida"],
-        base["descartada"],
-        base["devolvida"],
-        base["produzida"],
-    )
-
-
 @router.get("/events")
 async def event_insights(
     periodo: str = Query(default="mes_atual"),
@@ -104,10 +87,7 @@ async def event_insights(
 
     entries = []
     for production, records in history:
-        consumido, descartado, devolvido, produzido = _balance_sums(records)
-        registrado = consumido + descartado + devolvido
-        consumo_pct = round(100 * consumido / registrado, 1) if registrado else 0.0
-        descarte_pct = round(100 * descartado / registrado, 1) if registrado else 0.0
+        consumo_pct, descarte_pct = balance_percentages(records)
         custo_desperdicio = sum(float(r.custo_desperdicio) for r in records)
         entries.append({
             "id": production.id,

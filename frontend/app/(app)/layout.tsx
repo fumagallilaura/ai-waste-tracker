@@ -7,7 +7,10 @@ import { useTheme } from "@/lib/theme";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { identifyUser } from "@/components/Analytics";
 import { flushOutbox, onPendingChange, pendingCount } from "@/lib/offline";
-import { Sun, Moon, Settings, LogOut, CloudOff } from "lucide-react";
+import { BottomNav } from "@/components/BottomNav";
+import { OnboardingTour } from "@/lib/tour";
+import { BrandMark } from "@/components/BrandMark";
+import { Sun, Moon, Settings, HelpCircle, LogOut, CloudOff } from "lucide-react";
 
 export default function AppLayout({
   children,
@@ -67,44 +70,44 @@ export default function AppLayout({
   return (
     <div className="min-h-screen bg-bg-primary">
       <header className="bg-bg-surface border-b border-border-default sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-2">
-          <Link href="/dashboard" className="text-lg md:text-xl font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap">
-            🌱 <span className="hidden sm:inline">Desperdício Zero</span>
-          </Link>
-          <nav className="flex gap-2 md:gap-4 items-center overflow-x-auto">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+          <BrandMark href="/dashboard" size="sm" />
+          <nav className="flex gap-2 md:gap-4 items-center">
             <Link
               href="/dashboard"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
-              Dashboard
+              Início
             </Link>
             <Link
               href="/recipes"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+              data-tour="nav-recipes"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
               Receitas
             </Link>
             <Link
               href="/productions"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+              data-tour="nav-events"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
-              Produções
+              Eventos
             </Link>
             <Link
               href="/analises"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
               Análises
             </Link>
             <Link
               href="/clients"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden sm:inline"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
               Clientes
             </Link>
             <Link
               href="/estoque"
-              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden sm:inline"
+              className="text-sm text-text-secondary hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap hidden md:inline"
             >
               Estoque
             </Link>
@@ -119,6 +122,13 @@ export default function AppLayout({
                 <Moon className="w-5 h-5 text-text-secondary" />
               )}
             </button>
+            <Link
+              href="/settings#help"
+              className="p-2 rounded-lg hover:bg-bg-surface-alt transition-colors"
+              aria-label="Ajuda e tutorial"
+            >
+              <HelpCircle className="w-5 h-5 text-text-secondary" />
+            </Link>
             <Link
               href="/settings"
               className="p-2 rounded-lg hover:bg-bg-surface-alt transition-colors"
@@ -137,10 +147,12 @@ export default function AppLayout({
           </nav>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-5xl mx-auto px-4 py-8 pb-24 md:pb-8">{children}</main>
+      <BottomNav />
+      <OnboardingTour />
 
       {pending > 0 && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-warning-100 dark:bg-warning-900/40 text-warning-800 dark:text-warning-200 border border-warning-300 dark:border-warning-700 rounded-full px-4 py-2 text-sm shadow-lg">
+        <div className="fixed bottom-20 md:bottom-4 right-4 z-50 flex items-center gap-2 bg-warning-100 dark:bg-warning-900/40 text-warning-800 dark:text-warning-200 border border-warning-300 dark:border-warning-700 rounded-full px-4 py-2 text-sm shadow-lg">
           <CloudOff className="w-4 h-4" />
           {pending} alteração(ões) salva(s) no dispositivo — enviamos quando a internet voltar
         </div>

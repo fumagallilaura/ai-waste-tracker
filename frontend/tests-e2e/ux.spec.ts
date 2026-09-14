@@ -70,11 +70,10 @@ test.describe("UX: rascunho, limpar e análises", () => {
     await page.getByRole("button", { name: "Balanço do evento" }).click();
     await page.getByPlaceholder("Ex: brigadeiro, panacota...").fill("canapé");
     const numbers = page.locator('form input[type="number"]');
-    await numbers.nth(0).fill("100");
-    await numbers.nth(1).fill("75");
-    await numbers.nth(2).fill("25");
-    await numbers.nth(3).fill("0");
-    await numbers.nth(4).fill("30");
+    await numbers.nth(0).fill("100"); // produzido
+    await numbers.nth(1).fill("25"); // sobrou
+    await page.getByRole("button", { name: "Sim, foi servida" }).click();
+    await numbers.nth(2).fill("30"); // custo
     await page.getByRole("button", { name: "Registrar balanço" }).click();
     await expect(page.getByText("Finalizado")).toBeVisible();
 

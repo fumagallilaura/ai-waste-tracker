@@ -3,130 +3,137 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─── Design Tokens ───────────────────────────────────────────
-   Kitchen-optimized palette based on research:
-   - Warm surfaces (food apps: iCook, Mise, BurmeseKitchen)
-   - Emerald primary (savings/success — "desperdício zero")
-   - Semantic colors: amber (waste), red (error), green (economy)
-   - Dark mode with warm undertone (avoids clinical feel)
-   - WCAG AA compliant (4.5:1+ for normal text)
+   Brand palette (user):
+     #EE6F24  orange bright
+     #BA3E0E  orange burnt
+     #68B042  green mid
+     #457D2C  green dark
+     #3B2317  brown
+     #2A160E  brown deep
+
+   Roles (UX + a11y):
+     Primary  = greens (#457D2C CTA, #68B042 accent)
+              → white on #457D2C ≈ 5.5:1 (AA)
+              → white on #68B042 fails small text → accent only
+     Warning  = oranges (#EE6F24 / #BA3E0E) for waste/alerts
+              → use dark brown text on orange surfaces
+     Neutrals = browns for text + dark mode (warm, food-forward)
    ─────────────────────────────────────────────────────────── */
 
 @theme {
-  /* Light mode — warm surfaces for food-forward UI */
-  --color-bg-primary: #F8FAFC;
+  /* Light — papel limpo, contraste AA com texto marrom */
+  --color-bg-primary: #FAF7F2;
   --color-bg-surface: #FFFFFF;
-  --color-bg-surface-alt: #F1F5F9;
-  --color-bg-warm: #FEFDF8;       /* Cream tint for food sections */
+  --color-bg-surface-alt: #F3EDE6;
+  --color-bg-warm: #FFF9F3;
 
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #64748B;
-  --color-text-inverse: #F8FAFC;
+  --color-text-primary: #2A160E;
+  --color-text-secondary: #5C4030;
+  --color-text-muted: #8A6B58;
+  --color-text-inverse: #FFFFFF;
 
-  --color-border-default: #E2E8F0;
-  --color-border-strong: #CBD5E1;
+  --color-border-default: #E8DDD2;
+  --color-border-strong: #D0BFAE;
 
-  /* Primary — Emerald (savings, success, CTAs) */
-  --color-primary-50: #ECFDF5;
-  --color-primary-100: #D1FAE5;
-  --color-primary-200: #A7F3D0;
-  --color-primary-300: #6EE7B7;
-  --color-primary-400: #34D399;
-  --color-primary-500: #10B981;
-  --color-primary-600: #059669;
-  --color-primary-700: #047857;
-  --color-primary-800: #065F46;
-  --color-primary-900: #064E3B;
+  /* Primary — green (savings / CTAs) */
+  --color-primary-50: #F1F8EC;
+  --color-primary-100: #DCEFCE;
+  --color-primary-200: #B9DF9D;
+  --color-primary-300: #8FCB66;
+  --color-primary-400: #68B042;
+  --color-primary-500: #549636;
+  --color-primary-600: #457D2C;
+  --color-primary-700: #386624;
+  --color-primary-800: #2C501C;
+  --color-primary-900: #1F3914;
 
-  /* Semantic — Amber (waste, warning) */
-  --color-warning-50: #FFFBEB;
-  --color-warning-100: #FEF3C7;
-  --color-warning-200: #FDE68A;
-  --color-warning-300: #FCD34D;
-  --color-warning-400: #FBBF24;
-  --color-warning-500: #F59E0B;
-  --color-warning-600: #D97706;
-  --color-warning-700: #B45309;
+  /* Warning — orange (waste / attention) */
+  --color-warning-50: #FFF4ED;
+  --color-warning-100: #FFE4D4;
+  --color-warning-200: #FFC7A8;
+  --color-warning-300: #F59A63;
+  --color-warning-400: #EE6F24;
+  --color-warning-500: #D85A14;
+  --color-warning-600: #BA3E0E;
+  --color-warning-700: #952F0A;
 
-  /* Semantic — Red (error, critical waste) */
-  --color-danger-50: #FEF2F2;
-  --color-danger-100: #FEE2E2;
-  --color-danger-200: #FECACA;
-  --color-danger-300: #FCA5A5;
-  --color-danger-400: #F87171;
-  --color-danger-500: #EF4444;
-  --color-danger-600: #DC2626;
-  --color-danger-700: #B91C1C;
+  /* Danger — burnt orange (destructive; same family, clearer than raw red) */
+  --color-danger-50: #FDF2EE;
+  --color-danger-100: #F9DED4;
+  --color-danger-200: #F0B39E;
+  --color-danger-300: #E07A55;
+  --color-danger-400: #D2552A;
+  --color-danger-500: #BA3E0E;
+  --color-danger-600: #9A320B;
+  --color-danger-700: #7A2709;
 
-  /* Semantic — Blue (info, links) */
-  --color-info-50: #EFF6FF;
-  --color-info-100: #DBEAFE;
-  --color-info-200: #BFDBFE;
-  --color-info-300: #93C5FD;
-  --color-info-400: #60A5FA;
-  --color-info-500: #3B82F6;
-  --color-info-600: #2563EB;
-  --color-info-700: #1D4ED8;
+  /* Info — soft teal-leaning green tint (keeps family, not random blue) */
+  --color-info-50: #F0F7EC;
+  --color-info-100: #D9ECD0;
+  --color-info-200: #B4D9A3;
+  --color-info-300: #7FBC62;
+  --color-info-400: #68B042;
+  --color-info-500: #457D2C;
+  --color-info-600: #386624;
+  --color-info-700: #2C501C;
 }
 
 /* ─── Dark Mode ──────────────────────────────────────────────
-   Warm undertone to avoid clinical feel.
-   Tested against WCAG AA: text-primary on bg-surface = 12.6:1
+   Deep browns (#2A160E / #3B2317) + brighter accents for contrast
    ─────────────────────────────────────────────────────────── */
 
 .dark {
-  --color-bg-primary: #0B1120;       /* Deep navy-black (warm undertone) */
-  --color-bg-surface: #1E293B;       /* Slate 800 — card surface */
-  --color-bg-surface-alt: #334155;   /* Slate 700 — alternate surface */
-  --color-bg-warm: #1A1F15;          /* Warm dark tint for food sections */
+  --color-bg-primary: #2A160E;
+  --color-bg-surface: #3B2317;
+  --color-bg-surface-alt: #4A2E1F;
+  --color-bg-warm: #322018;
 
-  --color-text-primary: #F1F5F9;     /* Slate 100 — primary text */
-  --color-text-secondary: #CBD5E1;   /* Slate 300 — secondary text */
-  --color-text-muted: #94A3B8;       /* Slate 400 — muted text */
-  --color-text-inverse: #0F172A;
+  --color-text-primary: #F7F3EE;
+  --color-text-secondary: #E4D5C8;
+  --color-text-muted: #C9B3A1;
+  --color-text-inverse: #2A160E;
 
-  --color-border-default: #334155;   /* Slate 700 */
-  --color-border-strong: #475569;    /* Slate 600 */
+  --color-border-default: #5C4030;
+  --color-border-strong: #7A5C4A;
 
-  /* Primary — slightly brighter for dark mode */
-  --color-primary-50: #064E3B;
-  --color-primary-100: #065F46;
-  --color-primary-200: #047857;
-  --color-primary-300: #059669;
-  --color-primary-400: #10B981;
-  --color-primary-500: #34D399;
-  --color-primary-600: #6EE7B7;
-  --color-primary-700: #A7F3D0;
-  --color-primary-800: #D1FAE5;
-  --color-primary-900: #ECFDF5;
+  /* Primary: keep #457D2C on buttons (white text AA); #68B042 for accents */
+  --color-primary-50: #1F3914;
+  --color-primary-100: #2C501C;
+  --color-primary-200: #386624;
+  --color-primary-300: #457D2C;
+  --color-primary-400: #68B042;
+  --color-primary-500: #68B042;
+  --color-primary-600: #457D2C;
+  --color-primary-700: #549636;
+  --color-primary-800: #8FCB66;
+  --color-primary-900: #DCEFCE;
 
-  /* Semantic — adjusted for dark mode contrast */
-  --color-warning-50: #78350F;
-  --color-warning-100: #92400E;
-  --color-warning-200: #B45309;
-  --color-warning-300: #D97706;
-  --color-warning-400: #F59E0B;
-  --color-warning-500: #FBBF24;
-  --color-warning-600: #FCD34D;
-  --color-warning-700: #FDE68A;
+  --color-warning-50: #5C2208;
+  --color-warning-100: #7A2E0A;
+  --color-warning-200: #952F0A;
+  --color-warning-300: #BA3E0E;
+  --color-warning-400: #EE6F24;
+  --color-warning-500: #F59A63;
+  --color-warning-600: #FFC7A8;
+  --color-warning-700: #FFE4D4;
 
-  --color-danger-50: #7F1D1D;
-  --color-danger-100: #991B1B;
-  --color-danger-200: #B91C1C;
-  --color-danger-300: #DC2626;
-  --color-danger-400: #EF4444;
-  --color-danger-500: #F87171;
-  --color-danger-600: #FCA5A5;
-  --color-danger-700: #FECACA;
+  --color-danger-50: #4A1C08;
+  --color-danger-100: #7A2709;
+  --color-danger-200: #9A320B;
+  --color-danger-300: #BA3E0E;
+  --color-danger-400: #D2552A;
+  --color-danger-500: #E07A55;
+  --color-danger-600: #F0B39E;
+  --color-danger-700: #F9DED4;
 
-  --color-info-50: #1E3A5F;
-  --color-info-100: #1E40AF;
-  --color-info-200: #2563EB;
-  --color-info-300: #3B82F6;
-  --color-info-400: #60A5FA;
-  --color-info-500: #93C5FD;
-  --color-info-600: #BFDBFE;
-  --color-info-700: #DBEAFE;
+  --color-info-50: #1F3914;
+  --color-info-100: #2C501C;
+  --color-info-200: #386624;
+  --color-info-300: #457D2C;
+  --color-info-400: #68B042;
+  --color-info-500: #7FC055;
+  --color-info-600: #B9DF9D;
+  --color-info-700: #DCEFCE;
 }
 
 /* ─── Base Styles ─────────────────────────────────────────── */
@@ -138,20 +145,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Focus ring — accessible on both light and dark */
 *:focus-visible {
   outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-/* Selection — emerald tint */
 ::selection {
   background-color: var(--color-primary-200);
   color: var(--color-primary-900);
 }
 
 .dark ::selection {
-  background-color: var(--color-primary-800);
-  color: var(--color-primary-100);
+  background-color: var(--color-primary-200);
+  color: var(--color-text-primary);
+}
+
+/* Tutorial: anel legado (spotlight agora é via JS) */
+.tour-highlight {
+  outline: 3px solid var(--color-primary-400);
+  outline-offset: 4px;
+  border-radius: 8px;
 }

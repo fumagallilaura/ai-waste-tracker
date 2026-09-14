@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useTheme } from "@/lib/theme";
+import { BrandMark } from "@/components/BrandMark";
 import { Sun, Moon } from "lucide-react";
 
 export default function AuthLayout({
@@ -14,9 +14,7 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen bg-bg-primary flex flex-col">
       <header className="max-w-5xl mx-auto w-full px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-primary-600 dark:text-primary-400">
-          🌱 Desperdício Zero
-        </Link>
+        <BrandMark href="/" size="md" />
         <button
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           className="p-2 rounded-lg hover:bg-bg-surface-alt transition-colors"

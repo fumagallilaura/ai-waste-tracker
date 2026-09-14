@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,9 +18,15 @@ from app.schemas import (
     RecipeImportResponse,
     RecipeResponse,
     RecipeUpdate,
+    TranscriptIngredientsRequest,
+    TranscriptIngredientsResponse,
 )
 from app.services.ai_service import generate_recipe
-from app.services.recipe_import_service import RecipeImportError, import_recipe_from_url
+from app.services.recipe_import_service import (
+    RecipeImportError,
+    import_recipe_from_url,
+    parse_ingredients_from_transcript,
+)
 
 router = APIRouter()
 
@@ -89,7 +93,7 @@ async def create_recipe(
 @limiter.limit("10/minute")
 async def import_recipe(
     request: Request,
-    data: RecipeImportRequest,
+    data: RecipeImportRequest = Body(...),
     user: User = Depends(get_current_user),
 ):
     """Parse a public recipe URL into structured data (user reviews before saving)."""
@@ -106,11 +110,28 @@ async def import_recipe(
 @limiter.limit("5/minute")
 async def generate_recipe_with_ai(
     request: Request,
-    data: RecipeAiRequest,
+    data: RecipeAiRequest = Body(...),
     user: User = Depends(get_current_user),
 ):
     """Gera uma receita com IA para revisão antes de salvar."""
     return await generate_recipe(data.prato, data.porcoes, data.observacoes)
+
+
+@router.post("/parse-transcript", response_model=TranscriptIngredientsResponse)
+@limiter.limit("30/minute")
+async def parse_transcript_ingredients(
+    request: Request,
+    data: TranscriptIngredientsRequest = Body(...),
+    user: User = Depends(get_current_user),
+):
+    """Extrai ingredientes de uma transcrição (parser local, sem LLM)."""
+    result = parse_ingredients_from_transcript(data.transcript)
+    if not result["ingredients"]:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Não consegui identificar ingredientes na fala. Tente de novo, por exemplo: 1 kg de farinha, 2 ovos.",
+        )
+    return result
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)

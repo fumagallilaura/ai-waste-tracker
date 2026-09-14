@@ -333,7 +333,12 @@ class TestWasteRecords:
         resp = await client.post(
             f"/api/productions/{production['id']}/waste",
             headers=auth["headers"],
-            json={"item": "caldo", "quantidade_consumida": 2, "unidade": " Panela "},
+            json={
+                "item": "caldo",
+                "quantidade_produzida": 2,
+                "quantidade_consumida": 2,
+                "unidade": " Panela ",
+            },
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["unidade"] == "panela"
@@ -376,6 +381,7 @@ class TestWasteRecords:
             headers=auth["headers"],
             json={
                 "item": "bolo",
+                "quantidade_produzida": 1,
                 "quantidade_consumida": 1,
                 "unidade": "unidade",
             },

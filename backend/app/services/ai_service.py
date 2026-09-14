@@ -14,6 +14,8 @@ from fastapi import HTTPException, status
 
 from app.config import get_settings
 
+ALLOWED_UNITS = frozenset({"kg", "g", "L", "ml", "unidade"})
+
 
 def _prompt(prato: str, porcoes: int, observacoes: str | None) -> list[dict]:
     system = (
@@ -32,10 +34,8 @@ def _prompt(prato: str, porcoes: int, observacoes: str | None) -> list[dict]:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-async def generate_recipe(
-    prato: str, porcoes: int, observacoes: str | None
-) -> dict:
-    """Chama o LLM e devolve a receita estruturada para revisão do usuário."""
+async def _chat_json(messages: list[dict], *, temperature: float = 0.2) -> dict:
+    """POST /chat/completions e devolve o objeto JSON parseado do content."""
     settings = get_settings()
     if not settings.ai_api_key:
         raise HTTPException(
@@ -53,8 +53,8 @@ async def generate_recipe(
                 headers={"Authorization": f"Bearer {settings.ai_api_key}"},
                 json={
                     "model": settings.ai_model,
-                    "messages": _prompt(prato, porcoes, observacoes),
-                    "temperature": 0.4,
+                    "messages": messages,
+                    "temperature": temperature,
                     "response_format": {"type": "json_object"},
                 },
             )
@@ -77,22 +77,42 @@ async def generate_recipe(
 
     try:
         content = response.json()["choices"][0]["message"]["content"]
-        recipe = json.loads(content)
+        return json.loads(content)
     except (KeyError, IndexError, json.JSONDecodeError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="A IA devolveu uma resposta inesperada. Tente novamente.",
         ) from None
 
-    # normalização defensiva: a IA pode alucinar campos
+
+def _normalize_unit(raw: str) -> str:
+    text = str(raw).strip()
+    if text in ALLOWED_UNITS:
+        return text
+    lower = text.lower()
+    aliases = {
+        "un": "unidade", "und": "unidade", "unidades": "unidade",
+        "l": "L", "grama": "g", "gramas": "g", "quilo": "kg", "quilos": "kg",
+        "litro": "L", "litros": "L",
+    }
+    return aliases.get(lower, "unidade")
+
+
+async def generate_recipe(
+    prato: str, porcoes: int, observacoes: str | None
+) -> dict:
+    """Chama o LLM e devolve a receita estruturada para revisão do usuário."""
+    recipe = await _chat_json(_prompt(prato, porcoes, observacoes), temperature=0.4)
+
     ingredients = []
     for ing in recipe.get("ingredients", [])[:50]:
         try:
+            unidade = _normalize_unit(ing["unidade"])
             ingredients.append({
                 "ingrediente": str(ing["ingrediente"])[:255],
                 "quantidade": round(float(ing["quantidade"]), 3),
-                "unidade": str(ing["unidade"])[:20],
-                "original": f'{ing["ingrediente"]}: {ing["quantidade"]} {ing["unidade"]}',
+                "unidade": unidade,
+                "original": f'{ing["ingrediente"]}: {ing["quantidade"]} {unidade}',
             })
         except (KeyError, TypeError, ValueError):
             continue

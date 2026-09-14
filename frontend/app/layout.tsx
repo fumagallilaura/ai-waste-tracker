@@ -3,14 +3,16 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
 import { Analytics } from "@/components/Analytics";
+import { Toaster } from "@/lib/toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Desperdício Zero — Descubra onde está perdendo dinheiro",
+  title: "redu — Produza certo, desperdice menos",
   description:
     "Gestão de desperdício alimentar para pequenos negócios. Receitas, eventos, lista de compras e controle de desperdício em 30 segundos.",
   keywords: [
+    "redu",
     "desperdício de alimentos",
     "calculadora de desperdício",
     "gestão de restaurante",
@@ -19,10 +21,14 @@ export const metadata: Metadata = {
     "eventos",
   ],
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logoredu.png",
+    apple: "/logoredu.png",
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#059669",
+  themeColor: "#457D2C",
 };
 
 export default function RootLayout({
@@ -34,6 +40,7 @@ export default function RootLayout({
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider>{children}</ThemeProvider>
+        <Toaster />
         <Analytics />
       </body>
     </html>

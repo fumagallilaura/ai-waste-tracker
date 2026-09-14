@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useTheme, type ThemeMode } from "@/lib/theme";
 import { apiGet, apiPost } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle } from "lucide-react";
+import { Sun, Moon, Monitor, Download, Trash2, AlertTriangle, HelpCircle } from "lucide-react";
 import Link from "next/link";
+import { startTour } from "@/lib/tour";
 
 const THEMES: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Claro", icon: Sun },
@@ -167,6 +168,28 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      {/* Ajuda */}
+      <section id="help" className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4 scroll-mt-24">
+        <h2 className="text-lg font-semibold text-text-primary">Ajuda</h2>
+        <button
+          type="button"
+          onClick={() => {
+            startTour();
+            // soft nav: o tour lê REPLAY_KEY e abre no dashboard
+            window.location.assign("/dashboard");
+          }}
+          className="w-full flex items-center justify-between py-3 px-4 rounded-lg border border-border-default hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <HelpCircle className="w-5 h-5 text-text-muted" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-text-primary">Tutorial guiado</p>
+              <p className="text-xs text-text-muted">3 toques: Receitas → Eventos → Novo evento</p>
+            </div>
+          </div>
+        </button>
       </section>
 
       {/* Account */}

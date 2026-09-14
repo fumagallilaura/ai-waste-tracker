@@ -106,8 +106,24 @@ class TestWasteSchemas:
         with pytest.raises(ValidationError):
             WasteRecordCreate(item="arroz", quantidade_consumida=-1, unidade="kg")
 
+    def test_rejects_destinations_above_produced(self):
+        with pytest.raises(ValidationError):
+            WasteRecordCreate(
+                item="arroz",
+                quantidade_produzida=5,
+                quantidade_consumida=3,
+                quantidade_descartada=2,
+                quantidade_devolvida=1,
+                unidade="kg",
+            )
+
     def test_accepts_custom_unit(self):
-        w = WasteRecordCreate(item="arroz", quantidade_consumida=1, unidade=" Xícara ")
+        w = WasteRecordCreate(
+            item="arroz",
+            quantidade_produzida=1,
+            quantidade_consumida=1,
+            unidade=" Xícara ",
+        )
         assert w.unidade == "xícara"
 
 

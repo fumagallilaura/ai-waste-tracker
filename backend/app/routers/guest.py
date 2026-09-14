@@ -5,13 +5,11 @@ hasheado antes de tocar o banco; o IP chega apenas como hash (LGPD: minimizaçã
 No login/registro, as produções do visitante são associadas à conta (claim).
 """
 
-from __future__ import annotations
-
 import hashlib
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -139,7 +137,7 @@ def _detail(production: Production) -> dict:
 async def create_guest_production(
     request: Request,
     response: Response,
-    data: ProductionCreate,
+    data: ProductionCreate = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Create the single free production for an unauthenticated visitor."""
@@ -191,8 +189,8 @@ async def create_guest_production(
             )
         )
 
-    await db.commit()
     await analytics.track(db, analytics.GUEST_TRIAL_CREATED, ip_hash=production.ip_hash)
+    await db.commit()
 
     result = await db.execute(
         select(Production)
@@ -282,7 +280,7 @@ async def create_guest_waste(
     production_id: uuid.UUID,
     request: Request,
     response: Response,
-    data: WasteRecordCreate,
+    data: WasteRecordCreate = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Register the single post-event balance for the guest production."""

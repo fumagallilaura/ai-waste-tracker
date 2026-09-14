@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.units import normalize_unit
 
@@ -126,6 +126,21 @@ class RecipeImportResponse(BaseModel):
     source_url: str
 
 
+class TranscriptIngredientsRequest(BaseModel):
+    transcript: str = Field(min_length=1, max_length=4000)
+
+
+class TranscriptIngredient(BaseModel):
+    ingrediente: str
+    quantidade: float
+    unidade: str
+    preco_unitario: float | None = None
+
+
+class TranscriptIngredientsResponse(BaseModel):
+    ingredients: list[TranscriptIngredient]
+
+
 # ─── Production Schemas ─────────────────────────────────────────
 
 class ProductionRecipeItem(BaseModel):
@@ -221,6 +236,17 @@ class WasteRecordCreate(BaseModel):
     @classmethod
     def validate_unidade(cls, v: str) -> str:
         return normalize_unit(v)
+
+    @model_validator(mode="after")
+    def validate_balance_total(self):
+        destinos = (
+            self.quantidade_consumida
+            + self.quantidade_descartada
+            + self.quantidade_devolvida
+        )
+        if destinos > self.quantidade_produzida:
+            raise ValueError("consumido + descartado + devolvido não pode superar produzido")
+        return self
 
 
 class WasteRecordUpdate(BaseModel):

@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Client, Production, ShoppingListItem, User, WasteRecord
 from app.schemas import DashboardHistoryItem, DashboardMetrics
+from app.services.analytics import balance_percentages
 
 router = APIRouter()
 
@@ -104,20 +105,11 @@ async def get_dashboard_history(
         )
         custo_desperdicio = float(result.scalar_one() or 0)
 
-        # % consumido sobre o que foi registrado no balanço (produzido ou consumido)
+        # Percentual médio consumido por item, usando o produzido como base.
         result = await db.execute(
-            select(
-                func.sum(WasteRecord.quantidade_consumida),
-                func.sum(WasteRecord.quantidade_descartada),
-                func.sum(WasteRecord.quantidade_devolvida),
-            ).where(WasteRecord.production_id == production.id)
+            select(WasteRecord).where(WasteRecord.production_id == production.id)
         )
-        consumido, descartado, devolvido = result.one()
-        consumido = float(consumido or 0)
-        descartado = float(descartado or 0)
-        devolvido = float(devolvido or 0)
-        registrado = consumido + descartado + devolvido
-        consumo_pct = (consumido / registrado * 100) if registrado > 0 else 0.0
+        consumo_pct, _ = balance_percentages(result.scalars().all())
 
         items.append(
             DashboardHistoryItem(

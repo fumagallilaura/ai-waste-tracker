@@ -301,9 +301,9 @@ export default function NewProductionPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Nova Produção</h1>
+          <h1 className="text-2xl font-bold text-text-primary">Novo evento</h1>
           <p className="text-text-secondary mt-1">
-            Informe o evento e quantas vezes cada receita será feita — a lista de requisição sai pronta.
+            Diga qual é o evento e quantas vezes vai fazer cada receita — a lista de compras sai pronta.
           </p>
         </div>
       </div>

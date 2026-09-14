@@ -6,6 +6,7 @@ import Link from "next/link";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { formatCurrency, getDisplayUnit } from "@/lib/units";
+import { toast, toastError, toastSuccess } from "@/lib/toast";
 import { ArrowLeft, ShoppingCart, AlertTriangle, CheckCircle, Plus, Trash2, RotateCcw } from "lucide-react";
 
 interface Production {
@@ -81,9 +82,8 @@ function ProductionDetailContent() {
   const [balanceForm, setBalanceForm] = useState({
     item: "",
     quantidade_produzida: "",
-    quantidade_consumida: "",
-    quantidade_descartada: "",
-    quantidade_devolvida: "",
+    sobra: "",
+    sobraExposta: true, // sobra ficou exposta ao público -> descartada; caso contrário volta pro estoque
     unidade: "g",
     custo_desperdicio: "",
   });
@@ -160,7 +160,7 @@ function ProductionDetailContent() {
       setEditingItemId(null);
       setEditQty("");
     } catch {
-      alert("Erro ao atualizar requisição");
+      toastError("Erro ao atualizar a lista de compras");
     }
   };
 
@@ -173,8 +173,9 @@ function ProductionDetailContent() {
         token
       );
       setProduction({ ...production, shopping_list: items });
+      toastSuccess("Lista recalculada");
     } catch {
-      alert("Erro ao recalcular a lista");
+      toastError("Erro ao recalcular a lista");
     }
   };
 
@@ -184,21 +185,34 @@ function ProductionDetailContent() {
     if (!token || !production) return;
 
     if (!balanceForm.item.trim()) {
-      alert("Informe o item");
+      toastError("Informe o item");
       return;
     }
+
+    const produzido = parseFloat(balanceForm.quantidade_produzida) || 0;
+    const sobra = parseFloat(balanceForm.sobra) || 0;
+    if (sobra > produzido) {
+      toastError("A sobra não pode ser maior que o que você fez");
+      return;
+    }
+    const consumido = Math.max(0, produzido - sobra);
+    const descartada = balanceForm.sobraExposta ? sobra : 0;
+    const devolvida = balanceForm.sobraExposta ? 0 : sobra;
+    const custo = balanceForm.sobraExposta
+      ? parseFloat(balanceForm.custo_desperdicio) || 0
+      : 0;
 
     try {
       const newBalance = await apiPost<Production["waste_records"][number]>(
         `/productions/${id}/waste`,
         {
           item: balanceForm.item.trim(),
-          quantidade_produzida: parseFloat(balanceForm.quantidade_produzida) || 0,
-          quantidade_consumida: parseFloat(balanceForm.quantidade_consumida) || 0,
-          quantidade_descartada: parseFloat(balanceForm.quantidade_descartada) || 0,
-          quantidade_devolvida: parseFloat(balanceForm.quantidade_devolvida) || 0,
+          quantidade_produzida: produzido,
+          quantidade_consumida: consumido,
+          quantidade_descartada: descartada,
+          quantidade_devolvida: devolvida,
           unidade: balanceForm.unidade,
-          custo_desperdicio: parseFloat(balanceForm.custo_desperdicio) || 0,
+          custo_desperdicio: custo,
         },
         token
       );
@@ -215,14 +229,14 @@ function ProductionDetailContent() {
       setBalanceForm({
         item: "",
         quantidade_produzida: "",
-        quantidade_consumida: "",
-        quantidade_descartada: "",
-        quantidade_devolvida: "",
+        sobra: "",
+        sobraExposta: balanceForm.sobraExposta,
         unidade: balanceForm.unidade,
         custo_desperdicio: "",
       });
+      toast("Balanço registrado!", "success");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao registrar balanço");
+      toastError(err instanceof Error ? err.message : "Erro ao registrar balanço");
     }
   };
 
@@ -240,8 +254,8 @@ function ProductionDetailContent() {
           waste_records: prev.waste_records.filter((r) => r.id !== recordId),
         };
       });
-    } catch (err) {
-      alert("Erro ao excluir registro");
+    } catch {
+      toastError("Erro ao excluir registro");
     }
   };
 
@@ -320,7 +334,7 @@ function ProductionDetailContent() {
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-bg-surface rounded-xl border border-border-default p-4">
-          <p className="text-sm text-text-muted">Requisição</p>
+          <p className="text-sm text-text-muted">Lista de compras</p>
           <p className="text-xl font-bold text-text-primary mt-1">
             {formatCurrency(totalRequisicao)}
           </p>
@@ -344,7 +358,7 @@ function ProductionDetailContent() {
       <div className="flex gap-1 bg-bg-surface-alt rounded-lg p-1">
         {[
           { key: "details" as Tab, label: "Detalhes", icon: CheckCircle },
-          { key: "shopping" as Tab, label: "Requisição", icon: ShoppingCart },
+          { key: "shopping" as Tab, label: "Lista de compras", icon: ShoppingCart },
           { key: "waste" as Tab, label: "Balanço do evento", icon: AlertTriangle },
         ].map(({ key, label, icon: Icon }) => (
           <button
@@ -397,7 +411,7 @@ function ProductionDetailContent() {
       {activeTab === "shopping" && (
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text-primary">Requisição de ingredientes</h2>
+            <h2 className="text-lg font-semibold text-text-primary">O que comprar</h2>
             <button
               onClick={handleRegenerate}
               className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700"
@@ -505,8 +519,8 @@ function ProductionDetailContent() {
             <div>
               <h2 className="text-lg font-semibold text-text-primary">Balanço do evento</h2>
               <p className="text-sm text-text-muted mt-1">
-                Para cada item: quanto foi consumido, quanto foi descartado (estava exposto) e
-                quanto voltou (não estava exposto). O que volta é creditado no estoque.
+                Para cada item, diga quanto você fez e quanto sobrou. Se a sobra estava exposta,
+                vira desperdício. Se não estava, volta pro estoque.
               </p>
             </div>
             <form onSubmit={handleAddBalance} className="space-y-3">
@@ -544,10 +558,10 @@ function ProductionDetailContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Produzido
+                    Quanto você fez?
                   </label>
                   <input
                     type="number"
@@ -563,47 +577,15 @@ function ProductionDetailContent() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Consumido
+                    Sobrou quanto?
                   </label>
                   <input
                     type="number"
                     step="0.001"
                     min="0"
-                    value={balanceForm.quantidade_consumida}
+                    value={balanceForm.sobra}
                     onChange={(e) =>
-                      setBalanceForm((prev) => ({ ...prev, quantidade_consumida: e.target.value }))
-                    }
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Descartado (exposto)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    value={balanceForm.quantidade_descartada}
-                    onChange={(e) =>
-                      setBalanceForm((prev) => ({ ...prev, quantidade_descartada: e.target.value }))
-                    }
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-danger-500 focus:border-danger-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Voltou (não exposto)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    value={balanceForm.quantidade_devolvida}
-                    onChange={(e) =>
-                      setBalanceForm((prev) => ({ ...prev, quantidade_devolvida: e.target.value }))
+                      setBalanceForm((prev) => ({ ...prev, sobra: e.target.value }))
                     }
                     placeholder="0"
                     className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -611,22 +593,60 @@ function ProductionDetailContent() {
                 </div>
               </div>
 
-              <div className="max-w-xs">
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Custo do descartado (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={balanceForm.custo_desperdicio}
-                  onChange={(e) =>
-                    setBalanceForm((prev) => ({ ...prev, custo_desperdicio: e.target.value }))
-                  }
-                  placeholder="0"
-                  className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
+              <fieldset className="space-y-2">
+                <legend className="block text-sm font-medium text-text-secondary mb-1">
+                  A sobra estava exposta ao público?
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBalanceForm((prev) => ({ ...prev, sobraExposta: true }))
+                    }
+                    className={`p-3 rounded-lg border-2 text-sm text-left transition-colors ${
+                      balanceForm.sobraExposta
+                        ? "border-danger-500 bg-danger-50 dark:bg-danger-900/20 text-danger-700 dark:text-danger-300"
+                        : "border-border-default text-text-secondary hover:border-border-strong"
+                    }`}
+                  >
+                    <p className="font-medium">Sim, foi servida</p>
+                    <p className="text-xs opacity-80">Vai virar desperdício</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBalanceForm((prev) => ({ ...prev, sobraExposta: false }))
+                    }
+                    className={`p-3 rounded-lg border-2 text-sm text-left transition-colors ${
+                      !balanceForm.sobraExposta
+                        ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300"
+                        : "border-border-default text-text-secondary hover:border-border-strong"
+                    }`}
+                  >
+                    <p className="font-medium">Não, ficou intacta</p>
+                    <p className="text-xs opacity-80">Volta pro estoque</p>
+                  </button>
+                </div>
+              </fieldset>
+
+              {balanceForm.sobraExposta && (
+                <div className="max-w-xs">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Quanto custou o que foi jogado fora? (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={balanceForm.custo_desperdicio}
+                    onChange={(e) =>
+                      setBalanceForm((prev) => ({ ...prev, custo_desperdicio: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder:text-text-muted text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"

@@ -9,6 +9,7 @@ import pytest
 from app.services.recipe_import_service import (
     RecipeImportError,
     parse_ingredient,
+    parse_ingredients_from_transcript,
     parse_recipe_html,
 )
 from tests.conftest import register_user
@@ -223,3 +224,46 @@ class TestImportEndpoint:
         assert response.status_code == 201, response.text
         recipe = response.json()
         assert len(recipe["ingredients"]) == 5
+
+
+class TestParseTranscriptLocal:
+    def test_voice_example(self):
+        result = parse_ingredients_from_transcript(
+            "A receita vai 10 tomates, 1 kg de farinha de trigo, "
+            "3 colheres de sal e 500 gramas de carne."
+        )
+        ings = result["ingredients"]
+        assert len(ings) == 4
+        assert ings[0] == {
+            "ingrediente": "tomates",
+            "quantidade": 10.0,
+            "unidade": "unidade",
+            "preco_unitario": None,
+        }
+        assert ings[1]["ingrediente"] == "farinha de trigo"
+        assert ings[1]["unidade"] == "kg"
+        assert ings[3]["unidade"] == "g"
+        assert ings[3]["quantidade"] == 500.0
+
+    def test_word_numbers(self):
+        result = parse_ingredients_from_transcript("dois ovos e meio quilo de farinha")
+        ings = result["ingredients"]
+        assert len(ings) == 2
+        assert ings[0]["quantidade"] == 2
+        assert ings[1]["quantidade"] == 0.5
+        assert ings[1]["unidade"] == "kg"
+
+    def test_continuous_speech_without_commas(self):
+        """STT often returns one blob: 'ovo 1 xícara de farinha 1 xícara de leite'."""
+        result = parse_ingredients_from_transcript(
+            "ovo 1 xícara de farinha de trigo 1 xícara de leite"
+        )
+        ings = result["ingredients"]
+        assert len(ings) == 3
+        assert ings[0]["ingrediente"] == "ovo"
+        assert ings[0]["quantidade"] == 1
+        assert ings[0]["unidade"] == "unidade"
+        assert "farinha" in ings[1]["ingrediente"]
+        assert ings[1]["unidade"] == "ml"  # xícara → ml
+        assert "leite" in ings[2]["ingrediente"]
+        assert ings[2]["unidade"] == "ml"

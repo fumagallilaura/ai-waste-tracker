@@ -93,10 +93,9 @@ test.describe("Fluxo completo: receita → produção → requisição → balan
 
     const numbers = page.locator('form input[type="number"]');
     await numbers.nth(0).fill("10"); // produzido
-    await numbers.nth(1).fill("3"); // consumido
-    await numbers.nth(2).fill("2"); // descartado (exposto)
-    await numbers.nth(3).fill("5"); // devolvido (não exposto)
-    await numbers.nth(4).fill("25"); // custo do descartado
+    await numbers.nth(1).fill("2"); // sobrou
+    await page.getByRole("button", { name: "Sim, foi servida" }).click();
+    await numbers.nth(2).fill("25"); // custo do descartado
 
     await page.getByRole("button", { name: "Registrar balanço" }).click();
 
@@ -127,6 +126,6 @@ test.describe("Fluxo completo: receita → produção → requisição → balan
     await page.getByRole("button", { name: "Salvar" }).click();
 
     await expect(page.getByText(`Buffet E2E ${unique}`)).toBeVisible();
-    await expect(page.getByText("Fator de produção: 70%")).toBeVisible();
+    await expect(page.getByText("Produz 70% do pedido")).toBeVisible();
   });
 });

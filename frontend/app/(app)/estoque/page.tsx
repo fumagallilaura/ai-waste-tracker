@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { getDisplayUnit, formatCurrency } from "@/lib/units";
+import { toastError } from "@/lib/toast";
 import { Plus, Package, Trash2, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 
 interface StockItem {
@@ -105,7 +106,7 @@ export default function EstoquePage() {
       await apiDelete(`/stock/${id}`, token);
       setItems((prev) => prev.filter((i) => i.id !== id));
     } catch {
-      alert("Erro ao remover item");
+      toastError("Erro ao remover item");
     }
   };
 
@@ -130,7 +131,7 @@ export default function EstoquePage() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Estoque</h1>
         <p className="text-text-secondary mt-1">
-          Controle o que você já tem. A lista de requisição das produções desconta o estoque automaticamente.
+          Controle o que você já tem. A lista de compras dos eventos desconta o estoque automaticamente.
         </p>
       </div>
 

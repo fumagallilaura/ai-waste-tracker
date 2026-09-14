@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
+import { BrandMark } from "@/components/BrandMark";
 import { Sun, Moon } from "lucide-react";
 
 export default function PublicLayout({
@@ -14,10 +15,8 @@ export default function PublicLayout({
   return (
     <div className="min-h-screen bg-bg-primary">
       <header className="border-b border-border-default bg-bg-surface">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-primary-600 dark:text-primary-400">
-            🌱 Desperdício Zero
-          </Link>
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <BrandMark href="/" size="md" />
           <nav className="flex gap-4 items-center">
             <button
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -48,7 +47,7 @@ export default function PublicLayout({
       <main>{children}</main>
       <footer className="border-t border-border-default mt-16 bg-bg-surface">
         <div className="max-w-5xl mx-auto px-4 py-8 text-center text-sm text-text-muted">
-          <p>© 2026 Desperdício Zero. Todos os direitos reservados.</p>
+          <p>© 2026 redu. Todos os direitos reservados.</p>
           <div className="mt-2 flex justify-center gap-4">
             <Link href="/privacidade" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
               Política de Privacidade

@@ -100,7 +100,12 @@ class TestGuestProduction:
 
         again = await client.post(
             f"/api/guest/productions/{production_id}/waste",
-            json={"item": "outro", "quantidade_consumida": 1, "unidade": "unidade"},
+            json={
+                "item": "outro",
+                "quantidade_produzida": 1,
+                "quantidade_consumida": 1,
+                "unidade": "unidade",
+            },
         )
         assert again.status_code == 403
         assert "balanço" in again.json()["detail"].lower()

@@ -202,3 +202,39 @@ class TestAiGeneration:
             "/api/recipes/generate-ai", headers=auth["headers"],
             json={"prato": "x", "porcoes": 1})
         assert resp.status_code == 502
+
+
+class TestParseTranscript:
+    async def test_parses_without_ai_key(self, client):
+        auth = await register_user(client, "voice1@b.com")
+        resp = await client.post(
+            "/api/recipes/parse-transcript",
+            headers=auth["headers"],
+            json={
+                "transcript": (
+                    "A receita vai 10 tomates, 1 kg de farinha de trigo, "
+                    "3 colheres de sal e 500 gramas de carne."
+                )
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert len(body["ingredients"]) == 4
+        assert body["ingredients"][0]["ingrediente"] == "tomates"
+        assert body["ingredients"][0]["quantidade"] == 10
+        assert body["ingredients"][0]["unidade"] == "unidade"
+        assert body["ingredients"][0]["preco_unitario"] is None
+        assert body["ingredients"][1]["ingrediente"] == "farinha de trigo"
+        assert body["ingredients"][1]["unidade"] == "kg"
+        assert body["ingredients"][2]["unidade"] == "unidade"  # colheres → unidade
+        assert body["ingredients"][3]["unidade"] == "g"
+        assert body["ingredients"][3]["quantidade"] == 500
+
+    async def test_empty_transcript_returns_422(self, client):
+        auth = await register_user(client, "voice2@b.com")
+        resp = await client.post(
+            "/api/recipes/parse-transcript",
+            headers=auth["headers"],
+            json={"transcript": "olá tudo bem"},
+        )
+        assert resp.status_code == 422

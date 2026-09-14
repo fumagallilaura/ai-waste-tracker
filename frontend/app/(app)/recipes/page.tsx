@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { formatCurrency, getDisplayUnit } from "@/lib/units";
+import { toastError } from "@/lib/toast";
 import { Plus, Edit2, Trash2, Copy, Globe } from "lucide-react";
 
 interface Ingredient {
@@ -51,8 +52,8 @@ export default function RecipesPage() {
       const { apiDelete } = await import("@/lib/api");
       await apiDelete(`/recipes/${id}`, token);
       setRecipes((prev) => prev.filter((r) => r.id !== id));
-    } catch (err) {
-      alert("Erro ao excluir receita");
+    } catch {
+      toastError("Erro ao excluir receita");
     }
   };
 
@@ -64,8 +65,8 @@ export default function RecipesPage() {
       const { apiPost } = await import("@/lib/api");
       const newRecipe = await apiPost<Recipe>(`/recipes/${id}/duplicate`, {}, token);
       setRecipes((prev) => [newRecipe, ...prev]);
-    } catch (err) {
-      alert("Erro ao duplicar receita");
+    } catch {
+      toastError("Erro ao duplicar receita");
     }
   };
 

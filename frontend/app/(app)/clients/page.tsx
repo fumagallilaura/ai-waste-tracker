@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { toastError } from "@/lib/toast";
 import { Plus, Trash2, Users, TrendingDown, Pencil, Check } from "lucide-react";
 
 interface Client {
@@ -111,7 +112,7 @@ export default function ClientsPage() {
         setPattern(null);
       }
     } catch {
-      alert("Erro ao excluir cliente");
+      toastError("Erro ao excluir cliente");
     }
   };
 
@@ -204,7 +205,7 @@ export default function ClientsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">
-                Fator de produção (0 a 1)
+                Quanto produzir por convidado (0 a 1)
               </label>
               <input
                 type="number"
@@ -216,7 +217,7 @@ export default function ClientsPage() {
                 className="w-full px-3 py-2 border border-border-default rounded-lg bg-bg-surface text-text-primary text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
               <p className="text-xs text-text-muted mt-1">
-                Fração do total a produzir por opção — ex.: 0.7 = regra dos 70%.
+                Ex.: 0,7 = faça 70% do total pedido (para não sobrar).
               </p>
             </div>
           </div>
@@ -267,7 +268,7 @@ export default function ClientsPage() {
                     </span>
                   </div>
                   <p className="text-xs text-text-muted mt-1">
-                    Fator de produção: {(c.fator_producao * 100).toFixed(0)}%
+                    Produz {(c.fator_producao * 100).toFixed(0)}% do pedido
                     {c.observacoes && ` · ${c.observacoes}`}
                   </p>
                 </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getAccessToken } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Calculator, TrendingDown, Package } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -15,12 +16,14 @@ export default function LandingPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-16">
       <div className="text-center mb-16">
+        <div className="flex justify-center mb-10">
+          <BrandMark href="/" size="lg" />
+        </div>
         <h1 className="text-4xl font-bold text-text-primary mb-4">
-          Produza a quantidade certa. <span className="text-primary-600 dark:text-primary-400">Desperdice menos.</span>
+         Produza. Reduza. Renda.
         </h1>
         <p className="text-lg text-text-secondary">
-          Controle de produção e estoque para quem faz comida sob encomenda:
-          receitas, eventos, lista de requisição e padrão de consumo por cliente.
+          Mais controle na produção. Menos desperdício. Mais rendimento.
         </p>
         <div className="mt-8 flex justify-center gap-4">
           {loggedIn ? (
@@ -62,7 +65,7 @@ export default function LandingPage() {
           <h2 className="font-semibold text-text-primary mb-2">Evento → ingredientes</h2>
           <p className="text-sm text-text-secondary">
             O evento precisa de 10 receitas do bolo? Informe a quantidade e receba a
-            lista de ingredientes para requisição, já descontando o que você tem em estoque.
+            lista de compras dos ingredientes, já descontando o que você tem em estoque.
           </p>
         </div>
 

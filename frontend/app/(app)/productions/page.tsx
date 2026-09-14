@@ -51,17 +51,18 @@ export default function ProductionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Produções</h1>
+          <h1 className="text-2xl font-bold text-text-primary">Eventos</h1>
           <p className="text-text-secondary mt-1">
-            Eventos e turnos de operação.
+            Cada evento vira uma lista de compras e um balanço no fim.
           </p>
         </div>
         <Link
           href="/productions/new"
+          data-tour="btn-new-event"
           className="flex items-center gap-2 bg-primary-600 text-text-inverse px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Nova produção
+          Novo evento
         </Link>
       </div>
 
@@ -73,13 +74,14 @@ export default function ProductionsPage() {
 
       {productions.length === 0 ? (
         <div className="bg-bg-surface rounded-xl border border-border-default p-12 text-center">
-          <p className="text-text-muted text-lg mb-4">Nenhuma produção cadastrada</p>
+          <p className="text-text-muted text-lg mb-4">Nenhum evento cadastrado</p>
           <Link
             href="/productions/new"
+            data-tour="btn-new-event"
             className="inline-flex items-center gap-2 bg-primary-600 text-text-inverse px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Criar primeira produção
+            Criar primeiro evento
           </Link>
         </div>
       ) : (
@@ -129,7 +131,7 @@ export default function ProductionsPage() {
                   >
                     {prod.status === "finalizado"
                       ? "Ver balanço →"
-                      : "Ver requisição →"}
+                      : "Ver lista de compras →"}
                   </span>
                 </div>
               </Link>

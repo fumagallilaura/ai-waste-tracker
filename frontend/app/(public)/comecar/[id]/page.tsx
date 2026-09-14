@@ -199,7 +199,7 @@ export default function GuestProductionPage() {
 
       <div className="flex gap-1 bg-bg-surface-alt rounded-lg p-1">
         {[
-          { key: "shopping" as const, label: "Requisição", icon: ShoppingCart },
+          { key: "shopping" as const, label: "Lista de compras", icon: ShoppingCart },
           { key: "waste" as const, label: "Balanço do evento", icon: AlertTriangle },
         ].map(({ key, label, icon: Icon }) => (
           <button

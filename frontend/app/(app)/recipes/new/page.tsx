@@ -8,7 +8,9 @@ import { getAccessToken } from "@/lib/auth";
 import { takeRecipePrefill } from "@/lib/prefill";
 import { DRAFT_KEYS, clearDraft, formatDraftAge, loadDraft, saveDraft } from "@/lib/drafts";
 import { toBaseUnit } from "@/lib/units";
-import { Plus, Trash2, ArrowLeft, Eraser, History } from "lucide-react";
+import { createVoiceSession, isSpeechSupported } from "@/lib/speech";
+import { parseTranscriptIngredients } from "@/lib/parseTranscriptIngredients";
+import { Plus, Trash2, ArrowLeft, Eraser, History, Mic, MicOff, Loader2 } from "lucide-react";
 
 const UNIDADES = ["kg", "g", "L", "ml", "unidade"];
 const TIPOS = ["entrada", "principal", "sobremesa", "bebida", "acompanhamento"];
@@ -19,6 +21,8 @@ interface IngredientForm {
   unidade: string;
   preco_unitario: string;
 }
+
+type VoiceStatus = "idle" | "listening" | "parsing";
 
 interface RecipeDraft {
   nome: string;
@@ -50,7 +54,18 @@ export default function NewRecipePage() {
     updatedAt: number;
   } | null>(null);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [voicePreview, setVoicePreview] = useState("");
+  const [speechSupported, setSpeechSupported] = useState(true);
   const skipAutosave = useRef(true);
+  const voiceSessionRef = useRef<ReturnType<typeof createVoiceSession> | null>(null);
+
+  useEffect(() => {
+    setSpeechSupported(isSpeechSupported());
+    return () => {
+      voiceSessionRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const prefill = takeRecipePrefill();
@@ -131,6 +146,96 @@ export default function NewRecipePage() {
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
+  };
+
+  const mergeVoiceIngredients = (
+    parsed: { ingrediente: string; quantidade: number; unidade: string; preco_unitario: number | null }[]
+  ) => {
+    const rows: IngredientForm[] = parsed.map((ing) => ({
+      ingrediente: ing.ingrediente,
+      quantidade: String(ing.quantidade),
+      unidade: UNIDADES.includes(ing.unidade) ? ing.unidade : "g",
+      preco_unitario:
+        ing.preco_unitario === null || ing.preco_unitario === undefined
+          ? ""
+          : String(ing.preco_unitario),
+    }));
+    if (rows.length === 0) return;
+
+    setIngredients((prev) => {
+      const onlyEmpty =
+        prev.length === 1 &&
+        !prev[0].ingrediente.trim() &&
+        !prev[0].quantidade &&
+        !prev[0].preco_unitario;
+      return onlyEmpty ? rows : [...prev, ...rows];
+    });
+  };
+
+  const startVoiceInput = () => {
+    if (!speechSupported) {
+      setError("Seu navegador não suporta ditado por voz. Use Chrome ou Edge.");
+      return;
+    }
+    if (voiceStatus !== "idle") return;
+    setError(null);
+    setVoicePreview("");
+    setVoiceStatus("listening");
+
+    const session = createVoiceSession({
+      onInterim: (text) => setVoicePreview(text),
+    });
+    voiceSessionRef.current = session;
+    try {
+      session.start();
+    } catch {
+      setVoiceStatus("idle");
+      setError("Não foi possível iniciar o microfone.");
+    }
+  };
+
+  const stopVoiceInput = async () => {
+    const session = voiceSessionRef.current;
+    if (!session || voiceStatus !== "listening") return;
+
+    setVoiceStatus("parsing");
+    const { transcript, error: speechError } = await session.stop();
+    voiceSessionRef.current = null;
+
+    if (speechError === "not-allowed") {
+      setVoiceStatus("idle");
+      setVoicePreview("");
+      setError("Permissão do microfone negada. Libere o acesso nas configurações do navegador.");
+      return;
+    }
+    if (speechError === "audio-capture") {
+      setVoiceStatus("idle");
+      setVoicePreview("");
+      setError("Não encontrei um microfone disponível.");
+      return;
+    }
+    if (!transcript) {
+      setVoiceStatus("idle");
+      setVoicePreview("");
+      setError("Não entendi nada. Tente falar de novo.");
+      return;
+    }
+
+    try {
+      const parsed = parseTranscriptIngredients(transcript);
+      if (parsed.length === 0) {
+        setError(
+          "Não consegui identificar ingredientes. Tente algo como: 1 kg de farinha, 2 ovos, 500 g de açúcar."
+        );
+      } else {
+        mergeVoiceIngredients(parsed);
+        setVoicePreview("");
+      }
+    } catch {
+      setError("Erro ao processar a fala");
+    } finally {
+      setVoiceStatus("idle");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -303,17 +408,66 @@ export default function NewRecipePage() {
 
         {/* Ingredients */}
         <div className="bg-bg-surface rounded-xl border border-border-default p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-text-primary">Ingredientes</h2>
-            <button
-              type="button"
-              onClick={addIngredient}
-              className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-            >
-              <Plus className="w-4 h-4" />
-              Adicionar
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={voiceStatus === "listening" ? stopVoiceInput : startVoiceInput}
+                disabled={voiceStatus === "parsing" || !speechSupported}
+                className={`flex items-center gap-1 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  voiceStatus === "listening"
+                    ? "text-danger-600 dark:text-danger-400 hover:text-danger-700"
+                    : "text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                }`}
+                aria-label={
+                  voiceStatus === "listening"
+                    ? "Parar ditado"
+                    : voiceStatus === "parsing"
+                      ? "Processando ditado"
+                      : "Adicionar ingredientes por voz"
+                }
+                title={
+                  speechSupported
+                    ? voiceStatus === "listening"
+                      ? "Parar e preencher"
+                      : "Ditar ingredientes"
+                    : "Ditado não suportado neste navegador"
+                }
+              >
+                {voiceStatus === "parsing" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : voiceStatus === "listening" ? (
+                  <MicOff className="w-4 h-4" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+                {voiceStatus === "listening"
+                  ? "Parar"
+                  : voiceStatus === "parsing"
+                    ? "Processando…"
+                    : "Por voz"}
+              </button>
+              <button
+                type="button"
+                onClick={addIngredient}
+                disabled={voiceStatus !== "idle"}
+                className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar
+              </button>
+            </div>
           </div>
+
+          {voiceStatus === "listening" && (
+            <p
+              data-testid="voice-preview"
+              className="text-sm text-text-secondary bg-bg-surface-alt rounded-lg px-3 py-2 border border-border-default"
+            >
+              {voicePreview || "Fale os ingredientes… (toque em Parar quando terminar)"}
+            </p>
+          )}
 
           {ingredients.map((ing, index) => (
             <div

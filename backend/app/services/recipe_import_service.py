@@ -31,6 +31,10 @@ _FRACTIONS = {
 _DIRECT_UNITS = {
     "g": "g", "kg": "kg", "ml": "ml", "l": "L", "un": "unidade",
     "unidade": "unidade", "unidades": "unidade",
+    "grama": "g", "gramas": "g",
+    "quilo": "kg", "quilos": "kg",
+    "litro": "L", "litros": "L",
+    "mililitro": "ml", "mililitros": "ml",
 }
 
 # Household units → (factor_to_base, base_unit) heuristic (pt-BR)
@@ -38,6 +42,7 @@ _HOUSEHOLD_UNITS: list[tuple[re.Pattern[str], float, str]] = [
     (re.compile(r"colher(es)?\s+(de\s+)?sopa|colherada(s)?"), 15, "g"),
     (re.compile(r"colher(es)?\s+(de\s+)?sobremesa"), 10, "g"),
     (re.compile(r"colher(es)?\s+(de\s+)?ch[aá]"), 5, "g"),
+    (re.compile(r"colher(es)?\b"), 1, "unidade"),
     (re.compile(r"x[ií]cara(s)?(\s+de\s+ch[aá])?|x[ií]cs?(\.)?"), 240, "ml"),
     (re.compile(r"copo(s)?"), 200, "ml"),
     (re.compile(r"lata(s)?"), 1, "unidade"),
@@ -126,6 +131,100 @@ def parse_ingredient(text: str) -> tuple[float, str, str]:
 
     # Unrecognized unit word (e.g. "queijo mussarela"): quantity in units
     return quantity, "unidade", rest
+
+
+_WORD_NUMBERS = {
+    "um": "1", "uma": "1", "dois": "2", "duas": "2", "tres": "3", "três": "3",
+    "quatro": "4", "cinco": "5", "seis": "6", "sete": "7", "oito": "8",
+    "nove": "9", "dez": "10", "meio": "0.5", "meia": "0.5",
+}
+
+_FILLER_PREFIX = re.compile(
+    r"^\s*((a|na|da)?\s*receita\s+(vai|leva|leva\s+só)?|"
+    r"(vai|leva|coloca|adicione|adicionei|preciso\s+de|tem)\s*)+",
+    re.IGNORECASE,
+)
+
+# Start of a quantity token inside continuous speech (after expand_word_numbers).
+_QTY_START = re.compile(
+    r"(?:(?<=^)|(?<=\s))"
+    r"(?:"
+    r"\d+[.,]?\d*(?:\s+\d+\s*[/-]\s*\d+)?"
+    r"|\d+\s*[/-]\s*\d+"
+    r"|½|⅓|⅔|¼|¾"
+    r")"
+    r"(?=\s|$|[.,;])"
+)
+
+
+def _expand_word_numbers(text: str) -> str:
+    """Replace spoken number words at token starts (um kg → 1 kg)."""
+    tokens = text.split()
+    out: list[str] = []
+    for tok in tokens:
+        key = tok.lower().strip(".,;")
+        out.append(_WORD_NUMBERS.get(key, tok))
+    return " ".join(out)
+
+
+def _split_transcript_chunks(transcript: str) -> list[str]:
+    """Split continuous speech on every quantity boundary.
+
+    Example:
+      "ovo 1 xícara de farinha 1 xícara de leite"
+      → ["1 ovo", "1 xícara de farinha", "1 xícara de leite"]
+    """
+    cleaned = _FILLER_PREFIX.sub("", transcript.strip())
+    cleaned = _expand_word_numbers(cleaned)
+    cleaned = " ".join(cleaned.replace(",", " ").replace(";", " ").split())
+    if not cleaned:
+        return []
+
+    starts = [m.start() for m in _QTY_START.finditer(cleaned)]
+    if not starts:
+        return []
+
+    chunks: list[str] = []
+    leading = cleaned[: starts[0]].strip()
+    # "ovo 1 xícara..." → treat bare leading noun as 1 unidade
+    if leading and not re.fullmatch(r"(e|mais|de|do|da|com|e\s+mais)+", leading, re.I):
+        chunks.append(f"1 {leading}")
+
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(cleaned)
+        piece = cleaned[start:end].strip(" ,;.")
+        # drop trailing connector words left before the next qty
+        piece = re.sub(r"\s+(e|mais)$", "", piece, flags=re.I).strip()
+        if piece:
+            chunks.append(piece)
+    return chunks
+
+
+def parse_ingredients_from_transcript(transcript: str) -> dict:
+    """Parse a spoken ingredient list into structured rows (no LLM).
+
+    Prices are never inferred from speech heuristics → always null.
+    Chunks without an explicit quantity are ignored (avoids filler speech).
+    """
+    ingredients = []
+    for chunk in _split_transcript_chunks(transcript)[:50]:
+        raw = " ".join(chunk.strip().split())
+        if not _QTY_PATTERN.match(raw):
+            continue
+        try:
+            quantidade, unidade, nome = parse_ingredient(chunk)
+        except (ValueError, TypeError):
+            continue
+        nome = nome.strip()
+        if not nome or quantidade <= 0:
+            continue
+        ingredients.append({
+            "ingrediente": nome[:255],
+            "quantidade": round(float(quantidade), 3),
+            "unidade": unidade,
+            "preco_unitario": None,
+        })
+    return {"ingredients": ingredients}
 
 
 def _iter_dicts(node):

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import hashlib
 import secrets
 import uuid
@@ -7,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,7 +87,7 @@ async def _claim_guest_productions(
 async def register(
     request: Request,
     response: Response,
-    data: RegisterRequest,
+    data: RegisterRequest = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new user account."""
@@ -125,7 +123,7 @@ async def register(
 async def login(
     request: Request,
     response: Response,
-    data: LoginRequest,
+    data: LoginRequest = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Authenticate and return tokens."""

@@ -99,7 +99,7 @@ export default function DashboardPage() {
       {history.length > 0 && (
         <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden">
           <div className="px-6 py-4 border-b border-border-default">
-            <h2 className="text-lg font-semibold text-text-primary">Produções recentes</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Eventos recentes</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -108,7 +108,7 @@ export default function DashboardPage() {
                   <th className="px-6 py-3 font-medium">Nome</th>
                   <th className="px-6 py-3 font-medium">Cliente</th>
                   <th className="px-6 py-3 font-medium">Data</th>
-                  <th className="px-6 py-3 font-medium text-right">Requisição</th>
+                  <th className="px-6 py-3 font-medium text-right">Lista de compras</th>
                   <th className="px-6 py-3 font-medium text-right">Descartado</th>
                   <th className="px-6 py-3 font-medium text-right">Consumido</th>
                 </tr>
@@ -167,11 +167,11 @@ export default function DashboardPage() {
               },
               {
                 n: 2,
-                titulo: "Crie a produção do evento",
+                titulo: "Crie o evento",
                 descricao:
-                  "Informe quantas receitas vai fazer — a lista para requisição sai pronta, descontando o estoque.",
-                href: "/productions/new",
-                cta: "Criar produção",
+                  "Em Eventos, toque em Novo evento. A lista de compras sai pronta, descontando o estoque.",
+                href: "/productions",
+                cta: "Ir para eventos",
               },
               {
                 n: 3,
@@ -179,7 +179,7 @@ export default function DashboardPage() {
                 descricao:
                   "Quanto foi consumido, descartado (exposto) e devolvido (não exposto). O app aprende o padrão.",
                 href: "/productions",
-                cta: "Ver produções",
+                cta: "Abrir eventos",
               },
             ].map(({ n, titulo, descricao, href, cta }) => (
               <li key={n} className="rounded-lg border border-border-default p-4 flex flex-col">
