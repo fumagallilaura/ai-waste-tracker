@@ -153,7 +153,39 @@ _QTY_START = re.compile(
     r"|\d+\s*[/-]\s*\d+"
     r"|½|⅓|⅔|¼|¾"
     r")"
-    r"(?=\s|$|[.,;])"
+    r"(?=\s|$|[.,;])",
+    re.IGNORECASE,
+)
+
+# Trailing money / residue often glued by STT: "ovos é r$", "farinha a r$"
+_NAME_TRAILING_JUNK = re.compile(
+    r"\s+(?:"
+    r"é\s*r\$?|a\s+r\$|r\$|"
+    r"a\s+\d+[.,]?\d*\s*(?:reais?\s*e\s*\d{1,2}|reais?|real|(?:o\s+)?(?:quilo|litro)|cada)?|"
+    r"(?:a|por|custa|custou)\s+(?:r\$\s*)?\d+[.,]?\d*.*|"
+    r"\d+[.,]?\d*\s*reais?(?:\s+e\s+\d{1,2})?.*|"
+    r"\d+[.,]?\d*\s+o\s+(?:quilo|litro)\b.*|"
+    r"(?:o\s+)?(?:quilo|litro|cada)|cada"
+    r")\s*$",
+    re.IGNORECASE,
+)
+
+_PRICE_ONLY_NAME = re.compile(
+    r"^(?:o|a|e|(?:o\s+)?(?:quilo|litro|cada|reais?|real|r\$))$",
+    re.IGNORECASE,
+)
+
+# Prices in chunk — including STT that drops "reais" ("a 5 o quilo")
+_CHUNK_PRICE = re.compile(
+    r"(?:"
+    r"(?:a|por|custa|custou|cada)\s+(?:r\$\s*)?(\d+[.,]?\d*)\s*"
+    r"(?:reais?\s*e\s*(\d{1,2})|reais?|real|(?:o\s+)?(?:quilo|litro)|cada)?"
+    r"|r\$\s*(\d+[.,]?\d*)"
+    r"|(\d+)\s*reais?\s*e\s*(\d{1,2})"
+    r"|(\d+[.,]?\d*)\s*reais?"
+    r"|(\d+[.,]?\d*)\s+o\s+(?:quilo|litro)\b"
+    r")",
+    re.IGNORECASE,
 )
 
 
@@ -167,12 +199,78 @@ def _expand_word_numbers(text: str) -> str:
     return " ".join(out)
 
 
+def _money_from_match(m: re.Match[str]) -> float | None:
+    g = m.groups()
+    # (whole, cents) from "a 5 reais e 50" or "5 reais e 50"
+    if g[0] is not None and g[1] is not None:
+        whole, cents = int(float(g[0].replace(",", "."))), int(g[1])
+        if cents < 10 and len(g[1]) == 1:
+            cents *= 10
+        return round(whole + cents / 100, 2)
+    if g[3] is not None and g[4] is not None:
+        whole, cents = int(g[3]), int(g[4])
+        if cents < 10 and len(g[4]) == 1:
+            cents *= 10
+        return round(whole + cents / 100, 2)
+    for idx in (0, 2, 5, 6):
+        if g[idx] is not None:
+            raw = g[idx].replace(",", ".")
+            try:
+                value = float(raw)
+            except ValueError:
+                continue
+            if value >= 0:
+                return round(value, 2)
+    return None
+
+
+def _extract_price_from_chunk(chunk: str) -> float | None:
+    matches = list(_CHUNK_PRICE.finditer(chunk))
+    if not matches:
+        return None
+    return _money_from_match(matches[-1])
+
+
+def _clean_spoken_name(name: str) -> str:
+    cleaned = name.strip()
+    cleaned = _NAME_TRAILING_JUNK.sub("", cleaned).strip(" ,.-")
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+(?:a|é|de)$", "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned
+
+
+def _is_price_amount(text: str, m: re.Match[str]) -> bool:
+    """True when this number is a price, not an ingredient quantity.
+
+    Covers STT that drops 'reais': 'a 5 o quilo', 'a 4 o litro'.
+    Also skips centavos after 'reais e' and amounts after 'R$'.
+    """
+    before = text[: m.start()]
+    after = text[m.end() :]
+    if re.search(r"r\$\s*$", before, re.I):
+        return True
+    if re.search(r"reais?\s+e\s*$", before, re.I):
+        return True  # "5 reais e 50"
+    if re.match(r"\s*(?:reais?|real)\b", after, re.I):
+        return True
+    if re.match(r"\s*o\s+(?:quilo|litro)\b", after, re.I):
+        return True
+    if re.match(r"\s*cada\b", after, re.I):
+        return True
+    # Voice grammar: "a/por <n>" introduces the unit price
+    if re.search(r"(?:^|[\s,;])(?:a|por|custa|custou)\s*$", before, re.I):
+        return True
+    return False
+
+
 def _split_transcript_chunks(transcript: str) -> list[str]:
     """Split continuous speech on every quantity boundary.
 
     Example:
       "ovo 1 xícara de farinha 1 xícara de leite"
       → ["1 ovo", "1 xícara de farinha", "1 xícara de leite"]
+
+    Money amounts ("5 reais", "a 5 o quilo") are not quantity starts.
     """
     cleaned = _FILLER_PREFIX.sub("", transcript.strip())
     cleaned = _expand_word_numbers(cleaned)
@@ -180,20 +278,22 @@ def _split_transcript_chunks(transcript: str) -> list[str]:
     if not cleaned:
         return []
 
-    starts = [m.start() for m in _QTY_START.finditer(cleaned)]
+    starts = [
+        m.start()
+        for m in _QTY_START.finditer(cleaned)
+        if not _is_price_amount(cleaned, m)
+    ]
     if not starts:
         return []
 
     chunks: list[str] = []
     leading = cleaned[: starts[0]].strip()
-    # "ovo 1 xícara..." → treat bare leading noun as 1 unidade
     if leading and not re.fullmatch(r"(e|mais|de|do|da|com|e\s+mais)+", leading, re.I):
         chunks.append(f"1 {leading}")
 
     for i, start in enumerate(starts):
         end = starts[i + 1] if i + 1 < len(starts) else len(cleaned)
         piece = cleaned[start:end].strip(" ,;.")
-        # drop trailing connector words left before the next qty
         piece = re.sub(r"\s+(e|mais)$", "", piece, flags=re.I).strip()
         if piece:
             chunks.append(piece)
@@ -201,11 +301,7 @@ def _split_transcript_chunks(transcript: str) -> list[str]:
 
 
 def parse_ingredients_from_transcript(transcript: str) -> dict:
-    """Parse a spoken ingredient list into structured rows (no LLM).
-
-    Prices are never inferred from speech heuristics → always null.
-    Chunks without an explicit quantity are ignored (avoids filler speech).
-    """
+    """Parse a spoken ingredient list into structured rows (no LLM)."""
     ingredients = []
     for chunk in _split_transcript_chunks(transcript)[:50]:
         raw = " ".join(chunk.strip().split())
@@ -215,14 +311,17 @@ def parse_ingredients_from_transcript(transcript: str) -> dict:
             quantidade, unidade, nome = parse_ingredient(chunk)
         except (ValueError, TypeError):
             continue
-        nome = nome.strip()
+        price = _extract_price_from_chunk(chunk)
+        nome = _clean_spoken_name(nome)
         if not nome or quantidade <= 0:
+            continue
+        if _PRICE_ONLY_NAME.match(nome):
             continue
         ingredients.append({
             "ingrediente": nome[:255],
             "quantidade": round(float(quantidade), 3),
             "unidade": unidade,
-            "preco_unitario": None,
+            "preco_unitario": price,
         })
     return {"ingredients": ingredients}
 

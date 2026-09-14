@@ -64,7 +64,7 @@ test.describe("UX: rascunho, limpar e análises", () => {
     await page.getByRole("button", { name: /Informar itens diretamente/ }).click();
     await page.getByPlaceholder("Ex: brigadeiro, panacota...").first().fill("canapé");
     await page.getByPlaceholder("Ex: 70").fill("100");
-    await page.getByRole("button", { name: "Criar produção" }).click();
+    await page.getByRole("button", { name: "Criar evento" }).click();
     await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, { timeout: 15_000 });
 
     await page.getByRole("button", { name: "Balanço do evento" }).click();

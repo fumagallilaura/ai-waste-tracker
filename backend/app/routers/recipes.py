@@ -10,7 +10,9 @@ from app.core.units import to_base_unit
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models import Recipe, RecipeIngredient, User
+from app.data.starter_catalog import STARTER_CATALOG, get_catalog_recipe
 from app.schemas import (
+    CatalogRecipe,
     RecipeAiRequest,
     RecipeAiResponse,
     RecipeCreate,
@@ -21,12 +23,8 @@ from app.schemas import (
     TranscriptIngredientsRequest,
     TranscriptIngredientsResponse,
 )
-from app.services.ai_service import generate_recipe
-from app.services.recipe_import_service import (
-    RecipeImportError,
-    import_recipe_from_url,
-    parse_ingredients_from_transcript,
-)
+from app.services.ai_service import generate_recipe, parse_ingredients_from_transcript
+from app.services.recipe_import_service import RecipeImportError, import_recipe_from_url
 
 router = APIRouter()
 
@@ -118,20 +116,71 @@ async def generate_recipe_with_ai(
 
 
 @router.post("/parse-transcript", response_model=TranscriptIngredientsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("10/minute")
 async def parse_transcript_ingredients(
     request: Request,
     data: TranscriptIngredientsRequest = Body(...),
     user: User = Depends(get_current_user),
 ):
-    """Extrai ingredientes de uma transcrição (parser local, sem LLM)."""
-    result = parse_ingredients_from_transcript(data.transcript)
+    """Extrai ingredientes da fala (LLM se configurada; senão parser local)."""
+    result = await parse_ingredients_from_transcript(data.transcript)
     if not result["ingredients"]:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Não consegui identificar ingredientes na fala. Tente de novo, por exemplo: 1 kg de farinha, 2 ovos.",
+            detail=(
+                "Não consegui identificar ingredientes na fala. "
+                "Ex.: 1 kg de farinha a 5 reais, 2 ovos a 1 real cada."
+            ),
         )
     return result
+
+
+@router.get("/catalog", response_model=list[CatalogRecipe])
+async def list_catalog(user: User = Depends(get_current_user)):
+    """List starter recipes available to adopt into the user's library."""
+    return STARTER_CATALOG
+
+
+@router.post(
+    "/catalog/{slug}/adopt",
+    response_model=RecipeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adopt_catalog_recipe(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Copy a catalog recipe into the current user's recipes."""
+    item = get_catalog_recipe(slug)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog recipe not found")
+
+    recipe = Recipe(
+        user_id=user.id,
+        nome=item["nome"],
+        rendimento_base=item["rendimento_base"],
+        tipo=item["tipo"],
+    )
+    db.add(recipe)
+    await db.flush()
+
+    for ing in item["ingredients"]:
+        base_qtd, base_unit = to_base_unit(ing["quantidade"], ing["unidade"])
+        db.add(
+            RecipeIngredient(
+                recipe_id=recipe.id,
+                ingrediente=ing["ingrediente"],
+                quantidade=ing["quantidade"],
+                unidade=ing["unidade"],
+                preco_unitario=ing.get("preco_unitario", 0),
+                unidade_base=base_unit,
+                unidade_base_qtd=base_qtd,
+            )
+        )
+
+    await db.commit()
+    return await _load_recipe(db, recipe.id)
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)

@@ -34,6 +34,10 @@ services:
       APP_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       APP_GOOGLE_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
       APP_FRONTEND_URL: http://localhost:3000
+      # OpenCode Go / qualquer API OpenAI-compatible
+      APP_AI_API_KEY: ${APP_AI_API_KEY:-}
+      APP_AI_BASE_URL: ${APP_AI_BASE_URL:-https://opencode.ai/zen/go/v1}
+      APP_AI_MODEL: ${APP_AI_MODEL:-deepseek-v4-flash}
     ports:
       - "8000:8000"
     volumes:

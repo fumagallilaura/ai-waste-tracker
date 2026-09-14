@@ -9,7 +9,6 @@ import { takeRecipePrefill } from "@/lib/prefill";
 import { DRAFT_KEYS, clearDraft, formatDraftAge, loadDraft, saveDraft } from "@/lib/drafts";
 import { toBaseUnit } from "@/lib/units";
 import { createVoiceSession, isSpeechSupported } from "@/lib/speech";
-import { parseTranscriptIngredients } from "@/lib/parseTranscriptIngredients";
 import { Plus, Trash2, ArrowLeft, Eraser, History, Mic, MicOff, Loader2 } from "lucide-react";
 
 const UNIDADES = ["kg", "g", "L", "ml", "unidade"];
@@ -22,7 +21,7 @@ interface IngredientForm {
   preco_unitario: string;
 }
 
-type VoiceStatus = "idle" | "listening" | "parsing";
+type VoiceStatus = "idle" | "listening" | "review" | "parsing";
 
 interface RecipeDraft {
   nome: string;
@@ -56,6 +55,7 @@ export default function NewRecipePage() {
   const [showClearModal, setShowClearModal] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
   const [voicePreview, setVoicePreview] = useState("");
+  const [voiceDraft, setVoiceDraft] = useState("");
   const [speechSupported, setSpeechSupported] = useState(true);
   const skipAutosave = useRef(true);
   const voiceSessionRef = useRef<ReturnType<typeof createVoiceSession> | null>(null);
@@ -125,6 +125,9 @@ export default function NewRecipePage() {
     setIngredients([{ ingrediente: "", quantidade: "", unidade: "g", preco_unitario: "" }]);
     clearDraft(DRAFT_KEYS.receita);
     setShowClearModal(false);
+    setVoiceDraft("");
+    setVoicePreview("");
+    setVoiceStatus("idle");
     setTimeout(() => (skipAutosave.current = false), 0);
   };
 
@@ -151,15 +154,20 @@ export default function NewRecipePage() {
   const mergeVoiceIngredients = (
     parsed: { ingrediente: string; quantidade: number; unidade: string; preco_unitario: number | null }[]
   ) => {
-    const rows: IngredientForm[] = parsed.map((ing) => ({
-      ingrediente: ing.ingrediente,
-      quantidade: String(ing.quantidade),
-      unidade: UNIDADES.includes(ing.unidade) ? ing.unidade : "g",
-      preco_unitario:
+    const rows: IngredientForm[] = parsed.map((ing) => {
+      const priceNum =
         ing.preco_unitario === null || ing.preco_unitario === undefined
-          ? ""
-          : String(ing.preco_unitario),
-    }));
+          ? NaN
+          : Number(ing.preco_unitario);
+      return {
+        ingrediente: ing.ingrediente,
+        quantidade: String(ing.quantidade),
+        unidade: UNIDADES.includes(ing.unidade) ? ing.unidade : "g",
+        preco_unitario: Number.isFinite(priceNum)
+          ? String(Math.round(priceNum * 100) / 100)
+          : "",
+      };
+    });
     if (rows.length === 0) return;
 
     setIngredients((prev) => {
@@ -177,9 +185,10 @@ export default function NewRecipePage() {
       setError("Seu navegador não suporta ditado por voz. Use Chrome ou Edge.");
       return;
     }
-    if (voiceStatus !== "idle") return;
+    if (voiceStatus !== "idle" && voiceStatus !== "review") return;
     setError(null);
     setVoicePreview("");
+    setVoiceDraft("");
     setVoiceStatus("listening");
 
     const session = createVoiceSession({
@@ -198,7 +207,6 @@ export default function NewRecipePage() {
     const session = voiceSessionRef.current;
     if (!session || voiceStatus !== "listening") return;
 
-    setVoiceStatus("parsing");
     const { transcript, error: speechError } = await session.stop();
     voiceSessionRef.current = null;
 
@@ -221,20 +229,54 @@ export default function NewRecipePage() {
       return;
     }
 
+    setVoicePreview("");
+    setVoiceDraft(transcript);
+    setVoiceStatus("review");
+  };
+
+  const cancelVoiceReview = () => {
+    setVoiceDraft("");
+    setVoicePreview("");
+    setVoiceStatus("idle");
+  };
+
+  const submitVoiceDraft = async () => {
+    const transcript = voiceDraft.trim();
+    if (!transcript) {
+      setError("Edite ou grave de novo a transcrição antes de enviar.");
+      return;
+    }
+
+    const token = getAccessToken();
+    if (!token) {
+      setError("Não autenticado");
+      return;
+    }
+
+    setError(null);
+    setVoiceStatus("parsing");
     try {
-      const parsed = parseTranscriptIngredients(transcript);
-      if (parsed.length === 0) {
+      const result = await apiPost<{
+        ingredients: {
+          ingrediente: string;
+          quantidade: number;
+          unidade: string;
+          preco_unitario: number | null;
+        }[];
+      }>("/recipes/parse-transcript", { transcript }, token);
+      if (!result.ingredients?.length) {
         setError(
-          "Não consegui identificar ingredientes. Tente algo como: 1 kg de farinha, 2 ovos, 500 g de açúcar."
+          "Não consegui identificar ingredientes. Ajuste o texto e envie de novo."
         );
+        setVoiceStatus("review");
       } else {
-        mergeVoiceIngredients(parsed);
-        setVoicePreview("");
+        mergeVoiceIngredients(result.ingredients);
+        setVoiceDraft("");
+        setVoiceStatus("idle");
       }
-    } catch {
-      setError("Erro ao processar a fala");
-    } finally {
-      setVoiceStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao processar a fala");
+      setVoiceStatus("review");
     }
   };
 
@@ -430,7 +472,7 @@ export default function NewRecipePage() {
                 title={
                   speechSupported
                     ? voiceStatus === "listening"
-                      ? "Parar e preencher"
+                      ? "Parar e revisar texto"
                       : "Ditar ingredientes"
                     : "Ditado não suportado neste navegador"
                 }
@@ -446,12 +488,14 @@ export default function NewRecipePage() {
                   ? "Parar"
                   : voiceStatus === "parsing"
                     ? "Processando…"
-                    : "Por voz"}
+                    : voiceStatus === "review"
+                      ? "Gravar de novo"
+                      : "Por voz"}
               </button>
               <button
                 type="button"
                 onClick={addIngredient}
-                disabled={voiceStatus !== "idle"}
+                disabled={voiceStatus === "listening" || voiceStatus === "parsing"}
                 className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50"
               >
                 <Plus className="w-4 h-4" />
@@ -467,6 +511,74 @@ export default function NewRecipePage() {
             >
               {voicePreview || "Fale os ingredientes… (toque em Parar quando terminar)"}
             </p>
+          )}
+
+          {(voiceStatus === "review" || voiceStatus === "parsing") && (
+            <div
+              data-testid="voice-review"
+              className="space-y-3 rounded-lg border border-border-default bg-bg-surface-alt p-3"
+            >
+              <label className="block text-sm font-medium text-text-primary" htmlFor="voice-draft">
+                Confira a transcrição
+              </label>
+              <p className="text-xs text-text-muted">
+                Edite o texto se precisar (quantidade, nome, preço) e depois envie para preencher os campos.
+              </p>
+              <textarea
+                id="voice-draft"
+                value={voiceDraft}
+                onChange={(e) => setVoiceDraft(e.target.value)}
+                rows={4}
+                disabled={voiceStatus === "parsing"}
+                className="w-full rounded-lg border border-border-default bg-bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                placeholder="Ex.: 2 ovos a 1 real cada, 1 kg de farinha a 5 reais…"
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelVoiceReview}
+                  disabled={voiceStatus === "parsing"}
+                  className="rounded-lg border border-border-default px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary disabled:opacity-50"
+                >
+                  Descartar
+                </button>
+                <button
+                  type="button"
+                  onClick={submitVoiceDraft}
+                  disabled={voiceStatus === "parsing" || !voiceDraft.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-text-inverse hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {voiceStatus === "parsing" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Preenchendo…
+                    </>
+                  ) : (
+                    "Preencher campos"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {voiceStatus === "idle" && (
+            <div
+              data-testid="voice-tutorial"
+              className="text-sm text-text-secondary bg-bg-surface-alt rounded-lg px-3 py-3 border border-border-default space-y-1.5"
+            >
+              <p className="font-medium text-text-primary">Como ditar</p>
+              <p>
+                Para cada item, fale nesta ordem:{" "}
+                <strong className="text-text-primary">quantidade</strong>,{" "}
+                <strong className="text-text-primary">unidade</strong> (g, kg, ml, L ou unidade),{" "}
+                <strong className="text-text-primary">ingrediente</strong> e, se quiser, o{" "}
+                <strong className="text-text-primary">preço por kg/L/unidade</strong>.
+              </p>
+              <p className="text-text-muted">
+                Ex.: “2 ovos a 1 real cada, 1 kg de farinha a 5 reais o quilo, 500 ml de leite a 4 reais o litro.”
+                Na caixa de conferência, confira se a palavra “reais” apareceu — o microfone às vezes engole.
+              </p>
+            </div>
           )}
 
           {ingredients.map((ing, index) => (

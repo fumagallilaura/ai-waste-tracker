@@ -253,7 +253,15 @@ export default function ClientsPage() {
       {clients.length === 0 ? (
         <div className="text-center py-12 bg-bg-surface rounded-xl border border-border-default">
           <Users className="w-12 h-12 mx-auto text-text-muted mb-3" />
-          <p className="text-text-muted">Nenhum cliente cadastrado ainda.</p>
+          <p className="text-text-muted mb-4">Nenhum cliente cadastrado ainda.</p>
+          <button
+            type="button"
+            onClick={openNewForm}
+            className="inline-flex items-center gap-2 bg-primary-600 text-text-inverse px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Cadastrar primeiro cliente
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -335,7 +343,7 @@ export default function ClientsPage() {
                       ))}
                       <p className="text-xs text-text-muted flex items-center gap-1">
                         <Check className="w-3 h-3" />
-                        Ao criar a próxima produção deste cliente, use “Sugerir do histórico”.
+                        Ao criar o próximo evento deste cliente, use “Sugerir do histórico”.
                       </p>
                     </div>
                   )}
@@ -348,7 +356,7 @@ export default function ClientsPage() {
 
       <div className="text-sm text-text-muted">
         <Link href="/productions/new" className="text-primary-600 dark:text-primary-400 hover:underline">
-          Criar produção →
+          Criar evento →
         </Link>{" "}
         vincule um cliente e receba a sugestão baseada no histórico.
       </div>

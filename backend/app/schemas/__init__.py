@@ -126,6 +126,21 @@ class RecipeImportResponse(BaseModel):
     source_url: str
 
 
+class CatalogIngredient(BaseModel):
+    ingrediente: str
+    quantidade: float
+    unidade: str
+    preco_unitario: float = 0
+
+
+class CatalogRecipe(BaseModel):
+    slug: str
+    nome: str
+    rendimento_base: int
+    tipo: str | None
+    ingredients: list[CatalogIngredient]
+
+
 class TranscriptIngredientsRequest(BaseModel):
     transcript: str = Field(min_length=1, max_length=4000)
 

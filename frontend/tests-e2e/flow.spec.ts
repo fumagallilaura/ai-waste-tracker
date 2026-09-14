@@ -57,7 +57,7 @@ test.describe("Fluxo completo: receita → produção → requisição → balan
     await expect(page.locator('input[step="any"]')).toBeVisible();
     await page.locator('input[step="any"]').fill("10");
 
-    await page.getByRole("button", { name: "Criar produção" }).click();
+    await page.getByRole("button", { name: "Criar evento" }).click();
 
     // cai direto na requisição pronta
     await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, {
@@ -81,7 +81,7 @@ test.describe("Fluxo completo: receita → produção → requisição → balan
     await page.getByRole("button", { name: /Informar itens diretamente/ }).click();
     await page.getByPlaceholder("Ex: brigadeiro, panacota...").first().fill("panacota");
     await page.getByPlaceholder("Ex: 70").fill("50");
-    await page.getByRole("button", { name: "Criar produção" }).click();
+    await page.getByRole("button", { name: "Criar evento" }).click();
 
     // cai direto na requisição; troca para o balanço
     await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, {
@@ -102,8 +102,8 @@ test.describe("Fluxo completo: receita → produção → requisição → balan
     await expect(page.getByText("R$ 25,00").first()).toBeVisible();
     await expect(page.getByText("Finalizado")).toBeVisible();
 
-    // Dashboard reflete o descarte
-    await page.getByRole("link", { name: "Dashboard" }).click();
+    // Início reflete o descarte
+    await page.getByRole("link", { name: "Início" }).click();
     await expect(page.getByTestId("metric-desperdicio")).toHaveText("R$ 25,00");
     await expect(page.getByTestId("metric-compras")).toBeVisible();
     await expect(page.getByText("1 evento(s) finalizado(s)")).toBeVisible();

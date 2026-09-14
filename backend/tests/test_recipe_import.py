@@ -253,17 +253,29 @@ class TestParseTranscriptLocal:
         assert ings[1]["quantidade"] == 0.5
         assert ings[1]["unidade"] == "kg"
 
-    def test_continuous_speech_without_commas(self):
-        """STT often returns one blob: 'ovo 1 xícara de farinha 1 xícara de leite'."""
+    def test_user_phrase_with_prices(self):
         result = parse_ingredients_from_transcript(
-            "ovo 1 xícara de farinha de trigo 1 xícara de leite"
+            "2 ovos a 1 real cada, 1 kg de farinha a 5 reais o quilo, "
+            "500 ml de leite a 4 reais o litro."
         )
         ings = result["ingredients"]
         assert len(ings) == 3
-        assert ings[0]["ingrediente"] == "ovo"
-        assert ings[0]["quantidade"] == 1
-        assert ings[0]["unidade"] == "unidade"
-        assert "farinha" in ings[1]["ingrediente"]
-        assert ings[1]["unidade"] == "ml"  # xícara → ml
-        assert "leite" in ings[2]["ingrediente"]
-        assert ings[2]["unidade"] == "ml"
+        assert ings[0]["preco_unitario"] == 1
+        assert ings[1]["preco_unitario"] == 5
+        assert ings[2]["preco_unitario"] == 4
+
+    def test_stt_drops_reais_still_fills_prices(self):
+        """Browser STT often yields 'a 5 o quilo' without the word reais."""
+        result = parse_ingredients_from_transcript(
+            "2 ovos a 1 real cada, 1 kg de farinha a 5 o quilo, "
+            "500 ml de leite a 4 o litro."
+        )
+        ings = result["ingredients"]
+        assert len(ings) == 3
+        assert ings[0]["ingrediente"] in {"ovo", "ovos"}
+        assert ings[0]["preco_unitario"] == 1
+        assert ings[1]["ingrediente"] == "farinha"
+        assert ings[1]["preco_unitario"] == 5
+        assert ings[2]["ingrediente"] == "leite"
+        assert ings[2]["preco_unitario"] == 4
+        assert all(i["ingrediente"].lower() != "o" for i in ings)

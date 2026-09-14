@@ -34,7 +34,7 @@ async function createManualProduction(
   await page.getByPlaceholder("Ex: brigadeiro, panacota...").first().fill("bolo");
   await page.getByPlaceholder("Ex: 70").fill("10");
   await page.locator("select").last().selectOption("kg");
-  await page.getByRole("button", { name: "Criar produção" }).click();
+  await page.getByRole("button", { name: "Criar evento" }).click();
   await expect(page).toHaveURL(/\/productions\/[0-9a-f-]+.*tab=requisicao/, {
     timeout: 15_000,
   });

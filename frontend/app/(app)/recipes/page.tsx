@@ -6,7 +6,7 @@ import { apiGet } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { formatCurrency, getDisplayUnit } from "@/lib/units";
 import { toastError } from "@/lib/toast";
-import { Plus, Edit2, Trash2, Copy, Globe } from "lucide-react";
+import { Plus, Edit2, Trash2, Copy, Globe, BookOpen } from "lucide-react";
 
 interface Ingredient {
   id: string;
@@ -80,28 +80,37 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Receitas</h1>
           <p className="text-text-secondary mt-1">
             {recipes.length} {recipes.length === 1 ? "receita cadastrada" : "receitas cadastradas"}
           </p>
         </div>
-        <Link
-          href="/recipes/new"
-          className="flex items-center gap-2 bg-primary-600 text-text-inverse px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Nova receita
-        </Link>
-        <Link
-          href="/recipes/import"
-          data-testid="import-recipe-button"
-          className="flex items-center gap-2 bg-bg-surface text-primary-700 dark:text-primary-300 px-4 py-2 rounded-lg border border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm"
-        >
-          <Globe className="w-4 h-4" />
-          Importar da internet
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/recipes/new"
+            className="flex items-center gap-2 bg-primary-600 text-text-inverse px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Nova receita
+          </Link>
+          <Link
+            href="/recipes/catalog"
+            className="flex items-center gap-2 bg-bg-surface text-primary-700 dark:text-primary-300 px-4 py-2 rounded-lg border border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm"
+          >
+            <BookOpen className="w-4 h-4" />
+            Receitas prontas
+          </Link>
+          <Link
+            href="/recipes/import"
+            data-testid="import-recipe-button"
+            className="flex items-center gap-2 bg-bg-surface text-primary-700 dark:text-primary-300 px-4 py-2 rounded-lg border border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm"
+          >
+            <Globe className="w-4 h-4" />
+            Importar da internet
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -113,13 +122,22 @@ export default function RecipesPage() {
       {recipes.length === 0 ? (
         <div className="bg-bg-surface rounded-xl border border-border-default p-12 text-center">
           <p className="text-text-muted text-lg mb-4">Nenhuma receita cadastrada</p>
-          <Link
-            href="/recipes/new"
-            className="inline-flex items-center gap-2 bg-primary-600 text-text-inverse px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Cadastrar primeira receita
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/recipes/new"
+              className="inline-flex items-center gap-2 bg-primary-600 text-text-inverse px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Cadastrar primeira receita
+            </Link>
+            <Link
+              href="/recipes/catalog"
+              className="inline-flex items-center gap-2 bg-bg-surface text-primary-700 dark:text-primary-300 px-6 py-2 rounded-lg border border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+            >
+              <BookOpen className="w-4 h-4" />
+              Começar com receitas prontas
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid gap-4">

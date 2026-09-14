@@ -27,6 +27,33 @@ interface HistoryItem {
   consumo_total: number;
 }
 
+const ONBOARDING_STEPS = [
+  {
+    n: 1,
+    titulo: "Cadastre suas receitas",
+    descricao:
+      "Comece pelas receitas prontas de evento, ou crie/importe a sua com ingredientes e preço.",
+    href: "/recipes/catalog",
+    cta: "Usar receitas prontas",
+  },
+  {
+    n: 2,
+    titulo: "Crie o evento",
+    descricao:
+      "Em Eventos, toque em Novo evento. A lista de compras sai pronta, descontando o estoque.",
+    href: "/productions",
+    cta: "Ir para eventos",
+  },
+  {
+    n: 3,
+    titulo: "Registre o balanço no fim",
+    descricao:
+      "Quanto foi consumido, descartado (exposto) e devolvido (não exposto). O app aprende o padrão.",
+    href: "/productions",
+    cta: "Abrir eventos",
+  },
+];
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -43,13 +70,96 @@ export default function DashboardPage() {
     apiGet<HistoryItem[]>("/dashboard/history", token).then(setHistory).catch(() => {});
   }, []);
 
+  const isEmpty = history.length === 0;
+
+  const shortcuts = (
+    <p className="text-sm text-text-muted mt-2">
+      <Link href="/clients" className="text-primary-600 dark:text-primary-400 hover:underline">
+        Clientes
+      </Link>
+      <span className="mx-2 text-text-muted">·</span>
+      <Link href="/estoque" className="text-primary-600 dark:text-primary-400 hover:underline">
+        Estoque
+      </Link>
+    </p>
+  );
+
+  const onboarding = (
+    <div className="bg-bg-surface rounded-xl p-8 border border-border-default">
+      <h2 className="text-xl font-semibold text-text-primary mb-1">Comece por aqui</h2>
+      <p className="text-text-secondary text-sm mb-6">
+        Três passos para parar de desperdiçar:
+      </p>
+      <ol className="grid gap-4 md:grid-cols-3">
+        {ONBOARDING_STEPS.map(({ n, titulo, descricao, href, cta }) => (
+          <li key={n} className="rounded-lg border border-border-default p-4 flex flex-col">
+            <span className="w-7 h-7 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-sm font-semibold flex items-center justify-center mb-3">
+              {n}
+            </span>
+            <p className="font-medium text-text-primary text-sm">{titulo}</p>
+            <p className="text-text-muted text-xs mt-1 mb-4 flex-1">{descricao}</p>
+            <Link
+              href={href}
+              className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
+            >
+              {cta} →
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+
+  const metricsCards = (
+    <div data-testid="dashboard-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
+        <p className="text-sm text-text-muted">Lista de compras (período)</p>
+        <p data-testid="metric-compras" className="text-3xl font-bold text-text-primary mt-2">
+          {formatCurrency(metrics?.total_compras ?? 0)}
+        </p>
+        <p className="text-xs text-text-muted mt-1">
+          {metrics && metrics.eventos_realizados > 0
+            ? `${metrics.eventos_realizados} evento(s) finalizado(s)`
+            : "Registre seu primeiro evento"}
+        </p>
+      </div>
+
+      <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
+        <p className="text-sm text-text-muted">Descartado este mês</p>
+        <p
+          data-testid="metric-desperdicio"
+          className="text-3xl font-bold text-danger-600 dark:text-danger-400 mt-2"
+        >
+          {formatCurrency(metrics?.desperdicio_total ?? 0)}
+        </p>
+        <p className="text-xs text-text-muted mt-1">
+          {metrics && metrics.eventos_realizados > 0
+            ? `Média ${formatCurrency(metrics.desperdicio_medio_por_evento)} por evento`
+            : "Registre o balanço no fim de cada evento"}
+        </p>
+      </div>
+
+      <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
+        <p className="text-sm text-text-muted">Taxa de desperdício</p>
+        <p
+          data-testid="metric-taxa"
+          className="text-3xl font-bold text-warning-600 dark:text-warning-400 mt-2"
+        >
+          {(metrics?.taxa_desperdicio ?? 0).toLocaleString("pt-BR")}%
+        </p>
+        <p className="text-xs text-text-muted mt-1">Descartado sobre o valor da lista de compras</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Início</h1>
         <p className="text-text-secondary mt-1">
           Quanto você comprou, quanto virou descarte e o que cada evento consome.
         </p>
+        {shortcuts}
       </div>
 
       {error && (
@@ -58,146 +168,64 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Metrics Cards */}
-      <div data-testid="dashboard-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
-          <p className="text-sm text-text-muted">Requisições do período</p>
-          <p data-testid="metric-compras" className="text-3xl font-bold text-text-primary mt-2">
-            {formatCurrency(metrics?.total_compras ?? 0)}
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            {metrics && metrics.eventos_realizados > 0
-              ? `${metrics.eventos_realizados} evento(s) finalizado(s)`
-              : "Registre sua primeira produção"}
-          </p>
-        </div>
-
-        <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
-          <p className="text-sm text-text-muted">Descartado este mês</p>
-          <p data-testid="metric-desperdicio" className="text-3xl font-bold text-danger-600 dark:text-danger-400 mt-2">
-            {formatCurrency(metrics?.desperdicio_total ?? 0)}
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            {metrics && metrics.eventos_realizados > 0
-              ? `Média ${formatCurrency(metrics.desperdicio_medio_por_evento)} por evento`
-              : "Registre o balanço no fim de cada evento"}
-          </p>
-        </div>
-
-        <div className="bg-bg-surface rounded-xl p-6 shadow-sm border border-border-default">
-          <p className="text-sm text-text-muted">Taxa de desperdício</p>
-          <p data-testid="metric-taxa" className="text-3xl font-bold text-warning-600 dark:text-warning-400 mt-2">
-            {(metrics?.taxa_desperdicio ?? 0).toLocaleString("pt-BR")}%
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            Descartado sobre o valor requisitado
-          </p>
-        </div>
-      </div>
-
-      {/* Recent history */}
-      {history.length > 0 && (
-        <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden">
-          <div className="px-6 py-4 border-b border-border-default">
-            <h2 className="text-lg font-semibold text-text-primary">Eventos recentes</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-text-muted">
-                  <th className="px-6 py-3 font-medium">Nome</th>
-                  <th className="px-6 py-3 font-medium">Cliente</th>
-                  <th className="px-6 py-3 font-medium">Data</th>
-                  <th className="px-6 py-3 font-medium text-right">Lista de compras</th>
-                  <th className="px-6 py-3 font-medium text-right">Descartado</th>
-                  <th className="px-6 py-3 font-medium text-right">Consumido</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.slice(0, 8).map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-border-default hover:bg-bg-surface-alt transition-colors"
-                  >
-                    <td className="px-6 py-3">
-                      <Link
-                        href={`/productions/${item.id}`}
-                        className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
-                      >
-                        {item.nome}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 text-text-secondary">{item.cliente ?? "—"}</td>
-                    <td className="px-6 py-3 text-text-secondary">
-                      {new Date(item.data).toLocaleDateString("pt-BR")}
-                    </td>
-                    <td className="px-6 py-3 text-right text-text-primary">
-                      {formatCurrency(item.custo_compras)}
-                    </td>
-                    <td className="px-6 py-3 text-right text-danger-600 dark:text-danger-400">
-                      {formatCurrency(item.custo_desperdicio)}
-                    </td>
-                    <td className="px-6 py-3 text-right text-text-secondary">
-                      {item.consumo_total.toLocaleString("pt-BR")}%
-                    </td>
+      {isEmpty ? (
+        <>
+          {onboarding}
+          {metricsCards}
+        </>
+      ) : (
+        <>
+          {metricsCards}
+          <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden">
+            <div className="px-6 py-4 border-b border-border-default">
+              <h2 className="text-lg font-semibold text-text-primary">Eventos recentes</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-text-muted">
+                    <th className="px-6 py-3 font-medium">Nome</th>
+                    <th className="px-6 py-3 font-medium">Cliente</th>
+                    <th className="px-6 py-3 font-medium">Data</th>
+                    <th className="px-6 py-3 font-medium text-right">Lista de compras</th>
+                    <th className="px-6 py-3 font-medium text-right">Descartado</th>
+                    <th className="px-6 py-3 font-medium text-right">Consumido</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {history.slice(0, 8).map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-t border-border-default hover:bg-bg-surface-alt transition-colors"
+                    >
+                      <td className="px-6 py-3">
+                        <Link
+                          href={`/productions/${item.id}`}
+                          className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                        >
+                          {item.nome}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-text-secondary">{item.cliente ?? "—"}</td>
+                      <td className="px-6 py-3 text-text-secondary">
+                        {new Date(item.data).toLocaleDateString("pt-BR")}
+                      </td>
+                      <td className="px-6 py-3 text-right text-text-primary">
+                        {formatCurrency(item.custo_compras)}
+                      </td>
+                      <td className="px-6 py-3 text-right text-danger-600 dark:text-danger-400">
+                        {formatCurrency(item.custo_desperdicio)}
+                      </td>
+                      <td className="px-6 py-3 text-right text-text-secondary">
+                        {item.consumo_total.toLocaleString("pt-BR")}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Comece por aqui: o fluxo do app em 3 passos */}
-      {history.length === 0 && (
-        <div className="bg-bg-surface rounded-xl p-8 border border-border-default">
-          <h2 className="text-xl font-semibold text-text-primary mb-1">Comece por aqui</h2>
-          <p className="text-text-secondary text-sm mb-6">
-            Três passos para parar de desperdiçar:
-          </p>
-          <ol className="grid gap-4 md:grid-cols-3">
-            {[
-              {
-                n: 1,
-                titulo: "Cadastre suas receitas",
-                descricao:
-                  "Ingredientes, rendimento e preço por kg/L/un. Vale importar da internet também.",
-                href: "/recipes/new",
-                cta: "Cadastrar receita",
-              },
-              {
-                n: 2,
-                titulo: "Crie o evento",
-                descricao:
-                  "Em Eventos, toque em Novo evento. A lista de compras sai pronta, descontando o estoque.",
-                href: "/productions",
-                cta: "Ir para eventos",
-              },
-              {
-                n: 3,
-                titulo: "Registre o balanço no fim",
-                descricao:
-                  "Quanto foi consumido, descartado (exposto) e devolvido (não exposto). O app aprende o padrão.",
-                href: "/productions",
-                cta: "Abrir eventos",
-              },
-            ].map(({ n, titulo, descricao, href, cta }) => (
-              <li key={n} className="rounded-lg border border-border-default p-4 flex flex-col">
-                <span className="w-7 h-7 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-sm font-semibold flex items-center justify-center mb-3">
-                  {n}
-                </span>
-                <p className="font-medium text-text-primary text-sm">{titulo}</p>
-                <p className="text-text-muted text-xs mt-1 mb-4 flex-1">{descricao}</p>
-                <Link
-                  href={href}
-                  className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
-                >
-                  {cta} →
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </div>
+        </>
       )}
     </div>
   );

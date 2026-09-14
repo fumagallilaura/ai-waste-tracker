@@ -288,7 +288,7 @@ export default function NewProductionPage() {
       // cai direto na requisição pronta — é o resultado que o usuário quer ver
       router.push(`/productions/${created.id}?tab=requisicao`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao criar produção");
+      setError(err instanceof Error ? err.message : "Erro ao criar evento");
     } finally {
       setSaving(false);
     }
@@ -319,7 +319,7 @@ export default function NewProductionPage() {
             <span>
               Você tinha um preenchimento em andamento{" "}
               <strong>({formatDraftAge(pendingDraft.updatedAt)})</strong>:{" "}
-              {pendingDraft.data.nome || "produção sem nome"}. Continuar de onde parou?
+              {pendingDraft.data.nome || "evento sem nome"}. Continuar de onde parou?
             </span>
           </div>
           <div className="flex gap-2">
@@ -657,7 +657,7 @@ export default function NewProductionPage() {
             disabled={saving}
             className="px-6 py-2 bg-primary-600 text-text-inverse rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? "Salvando..." : "Criar produção"}
+            {saving ? "Salvando..." : "Criar evento"}
           </button>
         </div>
       </form>
@@ -676,7 +676,7 @@ export default function NewProductionPage() {
           >
             <h2 className="text-lg font-semibold text-text-primary">Começar do zero?</h2>
             <p className="text-sm text-text-secondary">
-              O preenchimento atual desta produção será apagado.{" "}
+              O preenchimento atual deste evento será apagado.{" "}
               <strong className="text-text-primary">
                 As produções que você já salvou continuam lá
               </strong>

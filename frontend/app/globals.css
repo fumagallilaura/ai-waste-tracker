@@ -167,3 +167,117 @@ body {
   outline-offset: 4px;
   border-radius: 8px;
 }
+
+/* ─── Landing page ─────────────────────────────────────────── */
+
+.landing-page {
+  --font-landing-display: inherit;
+  --font-landing-sans: inherit;
+}
+
+.landing-hero-glow {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -10%, color-mix(in srgb, var(--color-primary-400) 28%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 100% 30%, color-mix(in srgb, var(--color-warning-400) 18%, transparent), transparent 65%),
+    linear-gradient(180deg, var(--color-bg-warm) 0%, var(--color-bg-primary) 55%, var(--color-bg-primary) 100%);
+}
+
+.dark .landing-hero-glow {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -10%, color-mix(in srgb, var(--color-primary-400) 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 90% 40%, color-mix(in srgb, var(--color-warning-400) 12%, transparent), transparent 65%),
+    linear-gradient(180deg, var(--color-bg-warm) 0%, var(--color-bg-primary) 60%, var(--color-bg-primary) 100%);
+}
+
+.landing-hero-stage {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--color-border-default) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to top, color-mix(in srgb, var(--color-border-default) 55%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: bottom;
+}
+
+.landing-range {
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary-400) 35%, var(--color-border-default));
+  outline: none;
+}
+
+.landing-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-primary-600);
+  border: 3px solid var(--color-bg-surface);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary-700) 35%, transparent);
+  cursor: pointer;
+}
+
+.landing-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-primary-600);
+  border: 3px solid var(--color-bg-surface);
+  cursor: pointer;
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes landing-pop {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-landing-rise {
+  animation: landing-rise 0.7s ease-out both;
+}
+
+.animate-landing-float {
+  animation: landing-float 9s ease-in-out infinite;
+}
+
+.animate-landing-float-delayed {
+  animation: landing-float 11s ease-in-out 1.2s infinite;
+}
+
+.animate-landing-pop {
+  animation: landing-pop 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-landing-rise,
+  .animate-landing-float,
+  .animate-landing-float-delayed,
+  .animate-landing-pop {
+    animation: none;
+  }
+}
